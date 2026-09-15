@@ -1,0 +1,6 @@
+# The API token lives in ~/.config/omarchy/hatchbox.json, outside this tree.
+# Guard against a stray copy landing in a public history anyway.
+hatchbox.json
+*token*.json
+*.local.*
+!bin/hatchbox-token

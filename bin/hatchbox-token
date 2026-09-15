@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Manage the Hatchbox API token used by bin/hatchbox-api.
+# Usage: hatchbox-token set      (reads the token from stdin, never argv)
+#        hatchbox-token clear
+#        hatchbox-token status   (prints "present" or "missing")
+# The token lives in ~/.config/omarchy/hatchbox.json as {"token":"..."} with
+# mode 600. It is kept out of shell.json on purpose: shell.json is exported
+# and synced, this file is not.
+set -euo pipefail
+
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy"
+config="$config_dir/hatchbox.json"
+
+case "${1:-}" in
+  set)
+    IFS= read -r token || true
+    token="${token//[[:space:]]/}"
+    if [[ -z "$token" ]]; then
+      echo "hatchbox-token: empty token" >&2
+      exit 64
+    fi
+    mkdir -p "$config_dir"
+    tmp="$(mktemp "$config_dir/.hatchbox.json.XXXXXX")"
+    chmod 600 "$tmp"
+    jq -n --arg token "$token" '{token: $token}' > "$tmp"
+    mv -f "$tmp" "$config"
+    echo "saved"
+    ;;
+  clear)
+    rm -f "$config"
+    echo "cleared"
+    ;;
+  status)
+    if [[ -n "${HATCHBOX_API_TOKEN:-}" ]] || { [[ -f "$config" ]] && [[ -n "$(jq -r '.token // empty' "$config" 2>/dev/null)" ]]; }; then
+      echo "present"
+    else
+      echo "missing"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Usage: hatchbox-token set|clear|status" >&2
+    exit 64
+    ;;
+esac

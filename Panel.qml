@@ -38,6 +38,45 @@ Panel {
   readonly property int refreshMinutes: Math.max(1, parseInt(setting("refreshMinutes", 5), 10) || 5)
   readonly property string hideApps: String(setting("hideApps", ""))
   readonly property string apiBin: Qt.resolvedUrl("bin/hatchbox-api").toString().replace("file://", "")
+  readonly property string tokenBin: Qt.resolvedUrl("bin/hatchbox-token").toString().replace("file://", "")
+
+  // Token setup. The form shows when the API reports no token, or on demand
+  // via `t` / the setup IPC. The token goes to bin/hatchbox-token over
+  // stdin, never argv or shell.json, and never through an IPC payload.
+  property bool needsToken: false
+  property bool editingToken: false
+  property bool savingToken: false
+  property string tokenError: ""
+
+  function startEditingToken() {
+    editingToken = true
+    savingToken = false
+    tokenError = ""
+    Qt.callLater(function() {
+      tokenField.text = ""
+      tokenField.forceActiveFocus()
+    })
+  }
+
+  function cancelEditingToken() {
+    editingToken = false
+    savingToken = false
+    tokenField.text = ""
+    Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+  }
+
+  function commitToken() {
+    var value = tokenField.text.replace(/\s+/g, "")
+    if (value === "") {
+      tokenError = "Paste a token first"
+      return
+    }
+    savingToken = true
+    tokenError = ""
+    tokenSaveProc.secret = value
+    tokenField.text = ""
+    tokenSaveProc.running = true
+  }
 
   function open() {
     openedFromHotkey = false
@@ -59,6 +98,7 @@ Panel {
 
   function close() {
     setCenterHoverRevealSuppressed(false)
+    if (root.editingToken) root.cancelEditingToken()
     root.controller.hide()
   }
 
@@ -80,6 +120,7 @@ Panel {
 
   function refresh() {
     error = ""
+    needsToken = false
     accountsProc.running = false
     accountsProc.running = true
   }
@@ -108,8 +149,45 @@ Panel {
     stderr: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        if (String(text || "").indexOf("No Hatchbox token") >= 0) root.error = "No API token configured"
+        var err = String(text || "")
+        if (err.indexOf("No Hatchbox token") >= 0) {
+          root.error = "No API token configured"
+          root.needsToken = true
+          if (root.opened && !root.editingToken) root.startEditingToken()
+          return
+        }
+        var status = err.trim().match(/(\d{3})\s*$/)
+        if (status && status[1] === "401") {
+          root.error = "Hatchbox rejected the token"
+          root.needsToken = true
+        } else if (status && status[1].charAt(0) !== "2") {
+          root.error = "Hatchbox returned HTTP " + status[1]
+        } else if (!status && err.trim() !== "") {
+          root.error = "Could not reach Hatchbox"
+        }
       }
+    }
+  }
+
+  Process {
+    id: tokenSaveProc
+    property string secret: ""
+    command: [root.tokenBin, "set"]
+    stdinEnabled: true
+    onStarted: {
+      write(secret + "\n")
+      secret = ""
+    }
+    onExited: function(exitCode) {
+      root.savingToken = false
+      if (exitCode !== 0) {
+        root.tokenError = "Could not save the token"
+        return
+      }
+      root.editingToken = false
+      root.needsToken = false
+      Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+      root.refresh()
     }
   }
 
@@ -155,6 +233,7 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): void { root.refresh() }
+    function setup(): void { root.openFromHotkey(); root.startEditingToken() }
   }
 
   KeyboardPanel {
@@ -170,9 +249,13 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.editingToken
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
-      onTextKey: function(t) { if (t === "r" || t === "R") root.refresh() }
+      onTextKey: function(t) {
+        if (t === "r" || t === "R") root.refresh()
+        else if (t === "t" || t === "T") root.startEditingToken()
+      }
 
       Flickable {
         id: panelFlick
@@ -200,12 +283,89 @@ Panel {
           }
 
           Text {
-            visible: root.error !== ""
+            visible: root.error !== "" && !(root.editingToken && root.needsToken)
             textFormat: Text.PlainText
             text: root.error
             color: root.urgent
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
+          }
+
+          // ---- Token setup form.
+          Column {
+            visible: root.editingToken
+            width: parent.width
+            spacing: Style.spacing.md
+
+            Text {
+              textFormat: Text.PlainText
+              text: "Paste your Hatchbox API token and press Enter"
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+            }
+            Text {
+              textFormat: Text.PlainText
+              text: "Create one at hatchbox.io/api_tokens. It is stored in ~/.config/omarchy/hatchbox.json with mode 600."
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              width: parent.width
+              wrapMode: Text.WordWrap
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.spacing.md
+
+              TextField {
+                id: tokenField
+                width: parent.width - saveHint.width - parent.spacing
+                enabled: !root.savingToken
+                password: true
+                placeholderText: "API token"
+                foreground: root.foreground
+                font.family: root.fontFamily
+
+                Keys.onPressed: function(event) {
+                  if (event.key === Qt.Key_Escape) {
+                    root.cancelEditingToken()
+                    event.accepted = true
+                  } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    root.commitToken()
+                    event.accepted = true
+                  }
+                }
+              }
+
+              Text {
+                id: saveHint
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.savingToken ? "Saving" : "Esc cancels"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+            }
+
+            Text {
+              visible: root.tokenError !== ""
+              textFormat: Text.PlainText
+              text: root.tokenError
+              color: root.urgent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+          }
+
+          Text {
+            visible: root.needsToken && !root.editingToken
+            textFormat: Text.PlainText
+            text: "Press t to paste a token"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
           }
 
           Text {

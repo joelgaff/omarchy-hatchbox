@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # First-check script. Run on the Omarchy box after copying this dir to
-# ~/.config/omarchy/plugins/joelgaff.hatchbox and creating ~/.config/omarchy/hatchbox.json.
+# ~/.config/omarchy/plugins/joelgaff.hatchbox and pasting a token into the panel.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 api="$here/bin/hatchbox-api"
