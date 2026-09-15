@@ -1,4 +1,4 @@
-# Hatchbox
+# Hatchbox for Omarchy
 
 An [Omarchy](https://omarchy.org) bar widget for your [Hatchbox.io](https://hatchbox.io) apps. The bar shows the Hatchbox mark and nothing else. Click it and a panel comes down with every app across your accounts, the branch and commit that is live, and whether the newest deploy succeeded. Each row can deploy, restart, or open the app in Hatchbox, so the things you usually open a browser tab for are one click away.
 
