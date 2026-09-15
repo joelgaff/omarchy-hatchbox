@@ -42,9 +42,17 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    // Nerd Font "package" glyph; swap for whatever reads as "deploy" to you.
-    text: panelLoader.item ? panelLoader.item.label : "󰏗"
     slotSize: Style.bar.statusSlot
+    // The Hatchbox mark takes the theme foreground, and the urgent color
+    // while any app's latest deploy has failed.
+    iconComponent: Component {
+      HatchboxMark {
+        iconSize: Style.bar.iconFont
+        color: button.active && button.useActiveColor ? button.activeColor : button.foreground
+      }
+    }
+    active: panelLoader.item ? panelLoader.item.anyFailed === true : false
+    activeColor: panelLoader.item && panelLoader.item.failedColor !== undefined ? panelLoader.item.failedColor : (root.bar ? root.bar.urgent : Color.urgent)
     tooltipText: panelLoader.item ? panelLoader.item.tooltip : "Hatchbox"
     onPressed: function(b) {
       if (b === Qt.MiddleButton) root.refresh()
