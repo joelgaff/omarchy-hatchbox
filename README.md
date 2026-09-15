@@ -105,3 +105,5 @@ qs -p "$OMARCHY_PATH/shell" log -t 200 | grep hatchbox
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+Hatchbox and the Hatchbox logo are trademarks and copyright of their respective owners. This plugin is an independent, community project and is not affiliated with, endorsed by, or supported by Hatchbox. The bar icon is a redrawn version of the Hatchbox mark, used to identify the service the widget talks to.
