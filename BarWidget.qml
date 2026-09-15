@@ -16,7 +16,10 @@ BarWidget {
     if ("anchorItem" in t) t.anchorItem = button
     if ("hostWidget" in t) t.hostWidget = root
   }
-  function refresh() { if (panelLoader.item && panelLoader.item.refresh) panelLoader.item.refresh() }
+  // One bar surface exists per monitor, each with its own panel. A refresh
+  // from any of them reaches all of them through the base broadcast().
+  function refreshPanel() { if (panelLoader.item && panelLoader.item.refresh) panelLoader.item.refresh() }
+  function refresh() { root.broadcast("refreshPanel") }
   function togglePanel() { if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle() }
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false

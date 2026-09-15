@@ -5,6 +5,8 @@
 #        hatchbox-api POST /apps/123/deploy '{"sha":"abc123"}'
 # Token lives in ~/.config/omarchy/hatchbox.json as {"token":"..."} (chmod 600),
 # or in $HATCHBOX_API_TOKEN. Never store it in shell.json.
+# The Authorization header goes to curl through a config file on stdin, so
+# the token never appears on a command line that /proc exposes to other users.
 set -euo pipefail
 
 method="${1:?method}"; path="${2:?path}"; body="${3:-}"
@@ -15,17 +17,17 @@ if [[ -z "$token" && -f "$config" ]]; then
   token="$(jq -r '.token // empty' "$config")"
 fi
 if [[ -z "$token" ]]; then
-  echo '{"error":"No Hatchbox token. Put {\"token\":\"...\"} in '"$config"' (chmod 600) or set HATCHBOX_API_TOKEN."}' >&2
+  echo '{"error":"No Hatchbox token. Paste one into the panel, or put {\"token\":\"...\"} in '"$config"' (chmod 600), or set HATCHBOX_API_TOKEN."}' >&2
   exit 78
 fi
 
 args=(-sS --max-time 15 -X "$method"
-  -H "Authorization: Bearer $token"
   -H "Accept: application/json"
-  -w '\n%{http_code}')
+  -w '\n%{http_code}'
+  --config -)
 [[ -n "$body" ]] && args+=(-H "Content-Type: application/json" -d "$body")
 
-out="$(curl "${args[@]}" "https://hatchbox.io/api/v1${path}")"
+out="$(printf 'header = "Authorization: Bearer %s"\n' "$token" | curl "${args[@]}" "https://hatchbox.io/api/v1${path}")"
 code="${out##*$'\n'}"
 json="${out%$'\n'*}"
 

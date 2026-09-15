@@ -10,6 +10,12 @@ import "Model.js" as Model
 // Hatchbox apps panel: one row per app across every account, with the
 // latest deploy state read from the logs endpoint (last_deploy_at only
 // moves on success). Rows carry deploy, restart, and view actions.
+//
+// Data flow: /accounts, then /accounts/:id/apps per account, then
+// /apps/:id/logs per app, one process at a time. Every fetch is tagged
+// with the refresh generation it started under, so a refresh that lands
+// mid-walk cannot mix results from two walks. A failed fetch keeps the
+// previous rows and reports the failure instead of dropping rows.
 Panel {
   id: root
   moduleName: "joelgaff.hatchbox"
@@ -24,20 +30,19 @@ Panel {
   property var hostWidget: null
   readonly property var barIdentity: hostWidget || root
 
-  property string label: "󰏗"
   property string tooltip: "Hatchbox"
   property string error: ""
   property var apps: []
   property var accounts: []
   property int accountCursor: 0
   property var pendingApps: []
+  property int generation: 0
 
   readonly property bool anyFailed: apps.some(function(row){ return row.failed })
   readonly property bool anyBusy: apps.some(function(row){ return row.busy })
   readonly property bool loading: accountsProc.running || appsProc.running || logsProc.running || logQueue.length > 0
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
   // Failed rows must read as red. Monochrome themes set their red to the
   // foreground, which would hide a failure, so fall back to a fixed red.
   readonly property color failedColor: (Qt.colorEqual(Color.urgent, foreground) || Qt.colorEqual(Color.urgent, Color.foreground)) ? "#c0392b" : Color.urgent
@@ -48,6 +53,10 @@ Panel {
   readonly property string hideApps: String(setting("hideApps", ""))
   readonly property string apiBin: Qt.resolvedUrl("bin/hatchbox-api").toString().replace("file://", "")
   readonly property string tokenBin: Qt.resolvedUrl("bin/hatchbox-token").toString().replace("file://", "")
+
+  // Give up on a busy row after this long without a settled log, so a lost
+  // job cannot keep the poll timer running forever.
+  readonly property int busyTimeoutMs: 30 * 60 * 1000
 
   // ---- Keyboard cursor over the app rows.
   property bool cursorActive: false
@@ -88,13 +97,21 @@ Panel {
     })
   }
 
-  // ---- Token setup. The form shows when the API reports no token, or on
-  // demand via `t` / the setup IPC. The token goes to bin/hatchbox-token over
-  // stdin, never argv or shell.json, and never through an IPC payload.
+  // ---- Token setup. The form opens when the API reports a missing or
+  // rejected token, once per problem (dismissing it with Esc keeps it shut
+  // until the next save), or on demand via the key button, `t`, or the
+  // setup IPC. The token goes to bin/hatchbox-token over stdin, never argv
+  // or shell.json, and never through an IPC payload.
   property bool needsToken: false
   property bool editingToken: false
   property bool savingToken: false
+  property bool tokenPromptDismissed: false
   property string tokenError: ""
+
+  function promptForToken() {
+    needsToken = true
+    if (opened && !editingToken && !tokenPromptDismissed) startEditingToken()
+  }
 
   function startEditingToken() {
     editingToken = true
@@ -109,8 +126,14 @@ Panel {
   function cancelEditingToken() {
     editingToken = false
     savingToken = false
+    tokenPromptDismissed = true
     tokenField.text = ""
     Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+  }
+
+  function toggleEditingToken() {
+    if (editingToken) cancelEditingToken()
+    else startEditingToken()
   }
 
   function commitToken() {
@@ -226,54 +249,52 @@ Panel {
   }
 
   // ---- Data: accounts, then apps per account, then deploy logs per app.
+
+  // A bar surface exists per monitor, and each has its own copy of this
+  // panel. User-driven refreshes go through the host widget so every
+  // screen reloads, not only the one that took the click.
+  function refreshAll() {
+    if (hostWidget && typeof hostWidget.refresh === "function") hostWidget.refresh()
+    else refresh()
+  }
+
   function refresh() {
+    generation += 1
     error = ""
     needsToken = false
+    logQueue = []
     accountsProc.running = false
+    appsProc.running = false
+    logsProc.running = false
     accountsProc.running = true
   }
 
   Process {
     id: accountsProc
+    property int startedGeneration: 0
     command: [root.apiBin, "GET", "/accounts"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (!raw) return
-        try {
-          var parsed = JSON.parse(raw)
-          if (!Array.isArray(parsed)) throw new Error("not an array")
-          root.accounts = parsed
-        } catch (e) {
-          if (root.error === "") root.error = "Could not read accounts"
-          return
-        }
-        root.pendingApps = []
-        root.accountCursor = 0
-        root.fetchNextAccount()
+    onStarted: startedGeneration = root.generation
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(exitCode) {
+      if (startedGeneration !== root.generation) return
+      var err = String(stderr.text || "")
+      if (exitCode !== 0) {
+        root.error = Model.describeFailure(err, "accounts")
+        if (err.indexOf("No Hatchbox token") >= 0 || Model.httpStatus(err) === "401") root.promptForToken()
+        return
       }
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var err = String(text || "")
-        if (err.indexOf("No Hatchbox token") >= 0) {
-          root.error = "No API token configured"
-          root.needsToken = true
-          if (root.opened && !root.editingToken) root.startEditingToken()
-          return
-        }
-        var status = err.trim().match(/(\d{3})\s*$/)
-        if (status && status[1] === "401") {
-          root.error = "Hatchbox rejected the token"
-          root.needsToken = true
-        } else if (status && status[1].charAt(0) !== "2") {
-          root.error = "Hatchbox returned HTTP " + status[1]
-        } else if (!status && err.trim() !== "") {
-          root.error = "Could not reach Hatchbox"
-        }
+      try {
+        var parsed = JSON.parse(String(stdout.text || "").trim())
+        if (!Array.isArray(parsed)) throw new Error("not an array")
+        root.accounts = parsed
+      } catch (e) {
+        root.error = "Could not read accounts"
+        return
       }
+      root.pendingApps = []
+      root.accountCursor = 0
+      root.fetchNextAccount()
     }
   }
 
@@ -283,7 +304,7 @@ Panel {
       pendingApps = []
       if (appIndex >= apps.length) appIndex = Math.max(0, apps.length - 1)
       updateTooltip()
-      queueLogs(apps.map(function(row){ return row.id }))
+      queueLogs(apps.map(function(row){ return { appId: row.id, logId: row.actionLogId } }))
       return
     }
     appsProc.accountName = String(accounts[accountCursor].name || "")
@@ -293,48 +314,82 @@ Panel {
 
   Process {
     id: appsProc
+    property int startedGeneration: 0
     property string accountName: ""
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var rows = Model.parseApps(String(text || ""), appsProc.accountName, root.hideApps)
-        root.pendingApps = root.pendingApps.concat(rows)
-        root.accountCursor += 1
-        root.fetchNextAccount()
+    onStarted: startedGeneration = root.generation
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(exitCode) {
+      if (startedGeneration !== root.generation) return
+      if (exitCode !== 0) {
+        // Keep the rows from the last good walk rather than dropping an account.
+        root.error = Model.describeFailure(String(stderr.text || ""), "apps for " + appsProc.accountName)
+        root.pendingApps = []
+        return
       }
+      root.pendingApps = root.pendingApps.concat(Model.parseApps(String(stdout.text || ""), root.hideApps))
+      root.accountCursor += 1
+      root.fetchNextAccount()
     }
   }
 
-  // One logs fetch at a time; rows update as each answer lands.
+  // One logs fetch at a time; rows update as each answer lands. An entry
+  // with a logId polls that job directly (GET /logs/:id); otherwise the
+  // app's recent log list is read.
   property var logQueue: []
 
-  function queueLogs(ids) {
+  function queueLogs(entries) {
     var next = logQueue.slice()
-    ids.forEach(function(id){ if (next.indexOf(id) === -1) next.push(id) })
+    entries.forEach(function(entry) {
+      var dup = next.some(function(q){ return q.appId === entry.appId && q.logId === entry.logId })
+      if (!dup) next.push(entry)
+    })
     logQueue = next
     pumpLogs()
   }
 
   function pumpLogs() {
     if (logsProc.running || logQueue.length === 0) return
-    var id = logQueue[0]
+    var entry = logQueue[0]
     logQueue = logQueue.slice(1)
-    logsProc.appId = id
-    logsProc.command = [apiBin, "GET", "/apps/" + id + "/logs?limit=5"]
+    logsProc.appId = entry.appId
+    logsProc.logId = entry.logId || 0
+    logsProc.command = [apiBin, "GET", logsProc.logId ? "/logs/" + logsProc.logId : "/apps/" + entry.appId + "/logs?limit=5"]
     logsProc.running = true
   }
 
   Process {
     id: logsProc
+    property int startedGeneration: 0
     property int appId: 0
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (raw !== "") root.updateRow(logsProc.appId, Model.statePatch(Model.latestDeploy(raw)))
-        Qt.callLater(root.pumpLogs)
+    property int logId: 0
+    onStarted: startedGeneration = root.generation
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: function(exitCode) {
+      if (startedGeneration !== root.generation) return
+      // A failed fetch leaves the row as it was; a red or busy row must not
+      // turn plain because one poll got throttled.
+      if (exitCode === 0) {
+        var raw = String(stdout.text || "").trim()
+        var row = root.rowById(logsProc.appId)
+        if (raw !== "" && row) {
+          if (logsProc.logId) {
+            var log = Model.parseLog(raw)
+            if (log) root.updateRow(logsProc.appId, Model.statePatch(log))
+          } else {
+            var entry = Model.pickActivity(raw, row.actionLogId)
+            if (entry !== undefined) root.updateRow(logsProc.appId, Model.statePatch(entry))
+          }
+        }
       }
+      Qt.callLater(root.pumpLogs)
     }
+  }
+
+  function rowById(appId) {
+    for (var i = 0; i < apps.length; i++) if (apps[i].id === appId) return apps[i]
+    return null
   }
 
   function updateRow(appId, patch) {
@@ -353,12 +408,24 @@ Panel {
     tooltip = text
   }
 
-  // While a deploy or restart is in flight, poll that app's logs.
+  // While a deploy or restart is in flight, poll it.
   Timer {
     interval: 8000
     running: root.anyBusy
     repeat: true
-    onTriggered: root.queueLogs(root.apps.filter(function(row){ return row.busy }).map(function(row){ return row.id }))
+    onTriggered: {
+      var now = Date.now()
+      var due = []
+      root.apps.forEach(function(row) {
+        if (!row.busy) return
+        if (row.busySince && now - row.busySince > root.busyTimeoutMs) {
+          root.updateRow(row.id, { busy: false, actionLogId: 0, busySince: 0 })
+          return
+        }
+        due.push({ appId: row.id, logId: row.actionLogId })
+      })
+      root.queueLogs(due)
+    }
   }
 
   Process {
@@ -366,16 +433,22 @@ Panel {
     property int appId: 0
     property string appName: ""
     property string action: ""
+    stdout: StdioCollector { waitForEnd: true }
+    stderr: StdioCollector { waitForEnd: true }
     onExited: function(exitCode) {
       if (exitCode !== 0) {
-        root.error = "Could not start " + actionProc.action + " for " + actionProc.appName
+        root.error = Model.describeFailure(String(stderr.text || ""), actionProc.action + " for " + actionProc.appName)
         return
       }
+      // The response is {"id": N}, the log to poll for this job.
+      var logId = 0
+      try { logId = Number(JSON.parse(String(stdout.text || "").trim()).id) || 0 } catch (e) {}
       root.updateRow(actionProc.appId, {
-        state: "pending", stateAt: "", stateAgo: "just now", stateSha: "", stateDescription: "",
-        failed: false, busy: true, isRestart: actionProc.action === "restart"
+        state: "pending", stateAgo: "just now", isRestart: actionProc.action === "restart",
+        failed: false, busy: true, actionLogId: logId, busySince: Date.now()
       })
       actionFollowUp.appId = actionProc.appId
+      actionFollowUp.logId = logId
       actionFollowUp.restart()
     }
   }
@@ -383,8 +456,9 @@ Panel {
   Timer {
     id: actionFollowUp
     property int appId: 0
+    property int logId: 0
     interval: 2500
-    onTriggered: root.queueLogs([appId])
+    onTriggered: root.queueLogs([{ appId: appId, logId: logId }])
   }
 
   Process {
@@ -404,8 +478,9 @@ Panel {
       }
       root.editingToken = false
       root.needsToken = false
+      root.tokenPromptDismissed = false
       Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
-      root.refresh()
+      root.refreshAll()
     }
   }
 
@@ -426,7 +501,7 @@ Panel {
     function show(): void { root.openFromHotkey() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
-    function refresh(): void { root.refresh() }
+    function refresh(): void { root.refreshAll() }
     function setup(): void { root.openFromHotkey(); root.startEditingToken() }
   }
 
@@ -452,7 +527,7 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
-        if (t === "r" || t === "R") root.refresh()
+        if (t === "r" || t === "R") root.refreshAll()
         else if (t === "t" || t === "T") root.startEditingToken()
         else if ((t === "d" || t === "D") && root.cursorActive) root.askDeploy(root.cursorRow())
         else if ((t === "s" || t === "S") && root.cursorActive) root.askRestart(root.cursorRow())
@@ -495,17 +570,32 @@ Panel {
               font.pixelSize: Style.font.bodySmall
             }
             PanelActionButton {
-              iconText: "󰑐"
+              id: refreshButton
+              // The glyph is drawn below so only it spins; the button's hover
+              // fill stays square and still.
+              iconText: ""
               tooltipText: "Refresh (r)"
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: root.refresh()
-              RotationAnimator on rotation {
-                running: root.loading
-                from: 0; to: 360
-                duration: 900
-                loops: Animation.Infinite
-                onRunningChanged: if (!running) parent.rotation = 0
+              onClicked: root.refreshAll()
+
+              Text {
+                id: refreshGlyph
+                textFormat: Text.PlainText
+                anchors.centerIn: parent
+                text: "󰑐"
+                color: refreshButton._hot ? refreshButton.hoverColor : root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: refreshButton.fontSize
+                transformOrigin: Item.Center
+
+                RotationAnimator on rotation {
+                  running: root.loading
+                  from: 0; to: 360
+                  duration: 900
+                  loops: Animation.Infinite
+                  onRunningChanged: if (!running) refreshGlyph.rotation = 0
+                }
               }
             }
             PanelActionButton {
@@ -513,7 +603,7 @@ Panel {
               tooltipText: root.editingToken ? "Cancel" : "Change API token"
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: root.editingToken ? root.cancelEditingToken() : root.startEditingToken()
+              onClicked: root.toggleEditingToken()
             }
           }
 
@@ -521,9 +611,11 @@ Panel {
             visible: root.error !== "" && !(root.editingToken && root.needsToken)
             textFormat: Text.PlainText
             text: root.error
-            color: root.urgent
+            color: root.failedColor
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
+            width: parent.width
+            wrapMode: Text.WordWrap
           }
 
           // ---- Token setup form.
@@ -588,7 +680,7 @@ Panel {
               visible: root.tokenError !== ""
               textFormat: Text.PlainText
               text: root.tokenError
-              color: root.urgent
+              color: root.failedColor
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
             }
@@ -597,7 +689,7 @@ Panel {
           Text {
             visible: root.needsToken && !root.editingToken
             textFormat: Text.PlainText
-            text: "Press t to paste a token"
+            text: "Press t or click the key to paste a token"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -606,7 +698,7 @@ Panel {
           Text {
             visible: root.error === "" && root.apps.length === 0
             textFormat: Text.PlainText
-            text: "Loading apps"
+            text: root.loading ? "Loading apps" : "No apps found"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -732,12 +824,14 @@ Panel {
       }
 
       Text {
+        id: busyGlyph
         visible: appRow.busy
         textFormat: Text.PlainText
         text: "󰦖"
         color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.icon
+        transformOrigin: Item.Center
         RotationAnimator on rotation {
           running: appRow.busy
           from: 0; to: 360

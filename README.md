@@ -34,7 +34,7 @@ Click the bar icon. The first time, the panel asks for a Hatchbox API token: pas
 
 Tokens are created at [hatchbox.io/api_tokens](https://hatchbox.io/api_tokens). They are unscoped, so treat one like a password.
 
-The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, an argument list, a log, or an IPC payload. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script.
+The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, a command line, a log, or an IPC payload: the API wrapper feeds curl its Authorization header through a config file on stdin, so the token is not visible in the process list either. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script.
 
 To replace the token later, click the key icon in the panel header or press `t`. To remove it:
 
@@ -42,10 +42,10 @@ To replace the token later, click the key icon in the panel header or press `t`.
 ~/.config/omarchy/plugins/joelgaff.hatchbox/bin/hatchbox-token clear
 ```
 
-If you would rather place the file yourself, the script is only doing this:
+If you would rather not paste into the panel, pipe the token in from wherever you keep it, so it never lands in your shell history:
 
 ```bash
-(umask 077; printf '{"token":"%s"}\n' "paste-the-token-here" > ~/.config/omarchy/hatchbox.json)
+op read "op://Private/Hatchbox/token" | ~/.config/omarchy/plugins/joelgaff.hatchbox/bin/hatchbox-token set
 ```
 
 `HATCHBOX_API_TOKEN` in the environment overrides the file.
@@ -54,7 +54,7 @@ If you would rather place the file yourself, the script is only doing this:
 
 **One row per app.** Name, branch, the commit that is live, and the state of the newest deploy or restart. That state is read from the app's logs rather than from `last_deploy_at`, which Hatchbox only moves on success. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows your theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
 
-**Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. The row then shows a spinner and polls the logs until the job settles, so a failed deploy turns red without a refresh.
+**Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. The row then shows a spinner and polls that job until it settles, so a failed deploy turns red without a refresh. A restart only speaks for the row while it is running or has failed: a restart that completes does not clear a failed deploy, because the failing build is still what's live.
 
 **A header that works.** "13 apps, 5 failed", in red when anything has failed, next to a refresh button that spins while the list reloads and a key button for replacing the token.
 

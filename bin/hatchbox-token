@@ -22,7 +22,8 @@ case "${1:-}" in
     mkdir -p "$config_dir"
     tmp="$(mktemp "$config_dir/.hatchbox.json.XXXXXX")"
     chmod 600 "$tmp"
-    jq -n --arg token "$token" '{token: $token}' > "$tmp"
+    # Through stdin rather than --arg, so the token is not on jq's command line.
+    printf '%s' "$token" | jq -R '{token: .}' > "$tmp"
     mv -f "$tmp" "$config"
     echo "saved"
     ;;
