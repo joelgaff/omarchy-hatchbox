@@ -1,6 +1,10 @@
-# Hatchbox for Omarchy
+# Hatchbox
 
-Deploy status, deploy/restart, and logs for [Hatchbox.io](https://hatchbox.io) apps, from the top bar.
+An [Omarchy](https://omarchy.org) bar widget for your [Hatchbox.io](https://hatchbox.io) apps. The bar shows the Hatchbox mark and nothing else. Click it and a panel comes down with every app across your accounts, the branch and commit that is live, and whether the newest deploy succeeded. Each row can deploy, restart, or open the app in Hatchbox, so the things you usually open a browser tab for are one click away.
+
+<p align="center">
+  <img src="preview.png" alt="The Hatchbox panel: one row per app with branch, commit, deploy state, and deploy, restart, and open actions. Apps whose last deploy failed are in red." width="520">
+</p>
 
 ## Install
 
@@ -8,23 +12,53 @@ Deploy status, deploy/restart, and logs for [Hatchbox.io](https://hatchbox.io) a
 omarchy plugin add https://github.com/joelgaff/omarchy-hatchbox.git --enable
 ```
 
-Or by hand: copy this directory to `~/.config/omarchy/plugins/joelgaff.hatchbox`, run `omarchy-shell shell rescanPlugins`, then `omarchy plugin enable joelgaff.hatchbox`.
+Requires Omarchy 4. No sudo, nothing downloaded at runtime. The only runtime dependencies are `curl` and `jq`, which every Omarchy install has.
 
-## Token
+The widget lands in the right section of the bar. Move it with `omarchy bar move`, or from the bar's own settings panel.
 
-Click the bar icon. The panel asks for a Hatchbox API token the first time; paste it and press Enter. Tokens are created at https://hatchbox.io/api_tokens. They are unscoped, so treat one like a password.
+To remove it again:
 
-The token is written to `~/.config/omarchy/hatchbox.json` with mode 600 by `bin/hatchbox-token`, which reads it from stdin. It never touches `shell.json`, argv, a log, or an IPC payload. Press `t` in the panel, or click the key icon in the panel header, to replace it. Run `bin/hatchbox-token clear` to remove it. `HATCHBOX_API_TOKEN` in the environment overrides the file.
+```bash
+omarchy plugin remove joelgaff.hatchbox
+```
 
-`bin/hatchbox-api` is the only place the token is read. All QML goes through it.
+That deletes the plugin. Your token in `~/.config/omarchy/hatchbox.json` stays until you delete it, so an accidental removal does not cost you a token.
 
-## What it shows
+## Getting a token
 
-One row per app across every account: name, branch, deployed SHA, and the state of the newest deploy or restart read from the app's logs. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows the theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
+Click the bar icon. The first time, the panel asks for a Hatchbox API token: paste it and press Enter.
 
-Each row has three actions: deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first, then the row shows a spinner and polls the logs until the job settles.
+<p align="center">
+  <img src="screenshots/token-setup.png" alt="The token form at the top of the panel, with a masked field and an Esc cancels hint" width="520">
+</p>
 
-## Keys
+Tokens are created at [hatchbox.io/api_tokens](https://hatchbox.io/api_tokens). They are unscoped, so treat one like a password.
+
+The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, an argument list, a log, or an IPC payload. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script.
+
+To replace the token later, click the key icon in the panel header or press `t`. To remove it:
+
+```bash
+~/.config/omarchy/plugins/joelgaff.hatchbox/bin/hatchbox-token clear
+```
+
+If you would rather place the file yourself, the script is only doing this:
+
+```bash
+(umask 077; printf '{"token":"%s"}\n' "paste-the-token-here" > ~/.config/omarchy/hatchbox.json)
+```
+
+`HATCHBOX_API_TOKEN` in the environment overrides the file.
+
+## What you get
+
+**One row per app.** Name, branch, the commit that is live, and the state of the newest deploy or restart. That state is read from the app's logs rather than from `last_deploy_at`, which Hatchbox only moves on success. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows your theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
+
+**Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. The row then shows a spinner and polls the logs until the job settles, so a failed deploy turns red without a refresh.
+
+**A count in the header.** "13 apps, 5 failed", in red when anything has failed.
+
+**Keyboard all the way.** Bind a hotkey to `omarchy-shell joelgaff.hatchbox toggle` and never touch the mouse:
 
 | Key | Action |
 | --- | --- |
@@ -37,27 +71,37 @@ Each row has three actions: deploy the branch, restart, and open the app in Hatc
 | `Esc` | Close |
 | `Tab` | Switch to the neighbouring panel |
 
-## IPC
-
-```bash
-omarchy-shell joelgaff.hatchbox toggle
-omarchy-shell joelgaff.hatchbox refresh
-omarchy-shell joelgaff.hatchbox setup
-```
+Middle-click the bar icon to refresh without opening the panel.
 
 ## Settings
 
-Set per widget in `shell.json` or from the bar settings panel.
+Set per widget from the bar settings panel, or in the widget's entry in `~/.config/omarchy/shell.json`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `refreshMinutes` | `5` | How often to poll |
 | `hideApps` | `""` | Comma-separated app names to leave out |
 
+## IPC
+
+```bash
+omarchy-shell joelgaff.hatchbox toggle
+omarchy-shell joelgaff.hatchbox open
+omarchy-shell joelgaff.hatchbox close
+omarchy-shell joelgaff.hatchbox refresh
+omarchy-shell joelgaff.hatchbox setup    # open the panel on the token form
+```
+
 ## Development
 
-The shell hot-reloads edits to existing plugin files. Adding a new file (a new QML type, say) needs `omarchy restart shell` before the running shell can see it.
+Clone this repo, symlink it to `~/.config/omarchy/plugins/joelgaff.hatchbox`, and enable it. The shell hot-reloads edits to existing files. Adding a new file (a new QML type, say) needs `omarchy restart shell` before the running shell sees it. Watch for QML errors with:
 
-## First check
+```bash
+qs -p "$OMARCHY_PATH/shell" log -t 200 | grep hatchbox
+```
 
-`./check.sh` validates the manifest, lists accounts and apps, and prints the newest logs so we can confirm whether `last_deploy_at` moves on a failed deploy. It needs the token file from the step above.
+`./check.sh` validates the manifest, lists accounts and apps, and prints the newest logs per app. It needs a token in place.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
