@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Thin curl wrapper for the Hatchbox /api/v1 API.
+# Usage: hatchbox-api GET /accounts
+#        hatchbox-api POST /apps/123/deploy
+#        hatchbox-api POST /apps/123/deploy '{"sha":"abc123"}'
+# Token lives in ~/.config/omarchy/hatchbox.json as {"token":"..."} (chmod 600),
+# or in $HATCHBOX_API_TOKEN. Never store it in shell.json.
+set -euo pipefail
+
+method="${1:?method}"; path="${2:?path}"; body="${3:-}"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/hatchbox.json"
+
+token="${HATCHBOX_API_TOKEN:-}"
+if [[ -z "$token" && -f "$config" ]]; then
+  token="$(jq -r '.token // empty' "$config")"
+fi
+if [[ -z "$token" ]]; then
+  echo '{"error":"No Hatchbox token. Put {\"token\":\"...\"} in '"$config"' (chmod 600) or set HATCHBOX_API_TOKEN."}' >&2
+  exit 78
+fi
+
+args=(-sS --max-time 15 -X "$method"
+  -H "Authorization: Bearer $token"
+  -H "Accept: application/json"
+  -w '\n%{http_code}')
+[[ -n "$body" ]] && args+=(-H "Content-Type: application/json" -d "$body")
+
+out="$(curl "${args[@]}" "https://hatchbox.io/api/v1${path}")"
+code="${out##*$'\n'}"
+json="${out%$'\n'*}"
+
+# Emit the body on stdout and the HTTP status on stderr so QML can branch on either.
+printf '%s\n' "$json"
+echo "$code" >&2
+[[ "$code" =~ ^2 ]]

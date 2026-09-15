@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "joelgaff.hatchbox",
+  "name": "Hatchbox",
+  "version": "0.1.0",
+  "author": "Joel Gaff",
+  "description": "Monitor and manage Hatchbox.io app deploys from the bar",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "Hatchbox",
+    "description": "Deploy status, deploy/restart, and logs for Hatchbox apps",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": { "refreshMinutes": 5, "hideApps": "" },
+    "schema": [
+      { "key": "refreshMinutes", "type": "integer", "label": "Refresh (minutes)" },
+      { "key": "hideApps", "type": "string", "label": "Hide apps (comma-separated names)" }
+    ]
+  }
+}
