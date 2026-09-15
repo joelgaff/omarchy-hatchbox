@@ -3,7 +3,7 @@
   "id": "joelgaff.hatchbox",
   "name": "Hatchbox",
   "version": "0.1.0",
-  "author": "Joel Gaff",
+  "author": "Joel Gaff, Jr.",
   "description": "Monitor and manage Hatchbox.io app deploys from the bar",
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "BarWidget.qml" },
