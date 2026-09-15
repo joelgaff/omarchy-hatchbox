@@ -14,13 +14,13 @@ Or by hand: copy this directory to `~/.config/omarchy/plugins/joelgaff.hatchbox`
 
 Click the bar icon. The panel asks for a Hatchbox API token the first time; paste it and press Enter. Tokens are created at https://hatchbox.io/api_tokens. They are unscoped, so treat one like a password.
 
-The token is written to `~/.config/omarchy/hatchbox.json` with mode 600 by `bin/hatchbox-token`, which reads it from stdin. It never touches `shell.json`, argv, a log, or an IPC payload. Press `t` in the panel to replace it, or run `bin/hatchbox-token clear` to remove it. `HATCHBOX_API_TOKEN` in the environment overrides the file.
+The token is written to `~/.config/omarchy/hatchbox.json` with mode 600 by `bin/hatchbox-token`, which reads it from stdin. It never touches `shell.json`, argv, a log, or an IPC payload. Press `t` in the panel, or click the key icon in the panel header, to replace it. Run `bin/hatchbox-token clear` to remove it. `HATCHBOX_API_TOKEN` in the environment overrides the file.
 
 `bin/hatchbox-api` is the only place the token is read. All QML goes through it.
 
 ## What it shows
 
-One row per app across every account: name, branch, deployed SHA, and the state of the newest deploy or restart read from the app's logs. An app whose latest deploy or restart failed gets a red name, and the bar icon turns red while any app is in that state. Everything else follows the theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
+One row per app across every account: name, branch, deployed SHA, and the state of the newest deploy or restart read from the app's logs. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows the theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
 
 Each row has three actions: deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first, then the row shows a spinner and polls the logs until the job settles.
 

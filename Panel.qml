@@ -437,7 +437,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(520))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(600))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -492,6 +492,13 @@ Panel {
               color: root.anyFailed ? root.failedColor : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
+            }
+            PanelActionButton {
+              iconText: "󰌆"
+              tooltipText: root.editingToken ? "Cancel" : "Change API token"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              onClicked: root.editingToken ? root.cancelEditingToken() : root.startEditingToken()
             }
           }
 
