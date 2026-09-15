@@ -12,7 +12,7 @@ An [Omarchy](https://omarchy.org) bar widget for your [Hatchbox.io](https://hatc
 omarchy plugin add https://github.com/joelgaff/omarchy-hatchbox.git --enable
 ```
 
-Requires Omarchy 4. No sudo, nothing downloaded at runtime. The only runtime dependencies are `curl` and `jq`, which every Omarchy install has.
+Requires Omarchy 4. No sudo or pkexec is required, and nothing is downloaded at runtime. The only runtime dependencies are `curl` and `jq`, which every Omarchy install has. The panel talks to the Hatchbox API at hatchbox.io over HTTPS with your token, and to nothing else.
 
 The widget lands in the right section of the bar. Move it with `omarchy bar move`, or from the bar's own settings panel.
 
