@@ -56,7 +56,7 @@ If you would rather place the file yourself, the script is only doing this:
 
 **Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. The row then shows a spinner and polls the logs until the job settles, so a failed deploy turns red without a refresh.
 
-**A count in the header.** "13 apps, 5 failed", in red when anything has failed.
+**A header that works.** "13 apps, 5 failed", in red when anything has failed, next to a refresh button that spins while the list reloads and a key button for replacing the token.
 
 **Keyboard all the way.** Bind a hotkey to `omarchy-shell joelgaff.hatchbox toggle` and never touch the mouse:
 
@@ -71,7 +71,7 @@ If you would rather place the file yourself, the script is only doing this:
 | `Esc` | Close |
 | `Tab` | Switch to the neighbouring panel |
 
-Middle-click the bar icon to refresh without opening the panel.
+Middle-click the bar icon to refresh without opening the panel, or use the refresh button in the panel header.
 
 ## Settings
 

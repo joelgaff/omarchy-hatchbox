@@ -34,6 +34,7 @@ Panel {
 
   readonly property bool anyFailed: apps.some(function(row){ return row.failed })
   readonly property bool anyBusy: apps.some(function(row){ return row.busy })
+  readonly property bool loading: accountsProc.running || appsProc.running || logsProc.running || logQueue.length > 0
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -492,6 +493,20 @@ Panel {
               color: root.anyFailed ? root.failedColor : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
+            }
+            PanelActionButton {
+              iconText: "󰑐"
+              tooltipText: "Refresh (r)"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              onClicked: root.refresh()
+              RotationAnimator on rotation {
+                running: root.loading
+                from: 0; to: 360
+                duration: 900
+                loops: Animation.Infinite
+                onRunningChanged: if (!running) parent.rotation = 0
+              }
             }
             PanelActionButton {
               iconText: "󰌆"
