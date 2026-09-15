@@ -29,7 +29,7 @@ That deletes the plugin. Your token in `~/.config/omarchy/hatchbox.json` stays u
 Click the bar icon. The first time, the panel asks for a Hatchbox API token: paste it and press Enter.
 
 <p align="center">
-  <img src="screenshots/token-setup.png" alt="The token form at the top of the panel, with a masked field and an Esc cancels hint" width="520">
+  <img src="screenshots/token-form.png" alt="The token form at the top of the panel, with a masked field and an Esc cancels hint" width="520">
 </p>
 
 Tokens are created at [hatchbox.io/api_tokens](https://hatchbox.io/api_tokens). They are unscoped, so treat one like a password.
