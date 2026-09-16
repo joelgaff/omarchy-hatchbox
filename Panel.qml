@@ -783,6 +783,17 @@ Panel {
 
     implicitHeight: rowContent.implicitHeight + Style.spacing.rowPaddingX
 
+    // While a job runs, the row's text breathes slowly between the theme
+    // foreground and the busy colour, so the whole row reads as active.
+    property color pulseColor: root.foreground
+    SequentialAnimation {
+      running: appRow.busy
+      loops: Animation.Infinite
+      ColorAnimation { target: appRow; property: "pulseColor"; to: root.busyColor; duration: 1100; easing.type: Easing.InOutSine }
+      ColorAnimation { target: appRow; property: "pulseColor"; to: root.foreground; duration: 1100; easing.type: Easing.InOutSine }
+      onRunningChanged: if (!running) appRow.pulseColor = root.foreground
+    }
+
     MouseArea {
       anchors.fill: parent
       hoverEnabled: true
@@ -808,7 +819,7 @@ Panel {
           textFormat: Text.PlainText
           Layout.fillWidth: true
           text: appRow.app ? appRow.app.name : ""
-          color: appRow.failed ? root.failedColor : root.foreground
+          color: appRow.failed ? root.failedColor : (appRow.busy ? appRow.pulseColor : root.foreground)
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           elide: Text.ElideRight
@@ -821,7 +832,7 @@ Panel {
             ? appRow.app.branch + " @ " + (appRow.app.sha || "no deploy")
               + (appRow.stateText !== "" ? "   " + appRow.stateText : "")
             : ""
-          color: appRow.failed ? root.failedColor : root.dim
+          color: appRow.failed ? root.failedColor : (appRow.busy ? appRow.pulseColor : root.dim)
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
@@ -875,7 +886,7 @@ Panel {
       font.pixelSize: glyphButton.fontSize
       transformOrigin: Item.Center
 
-      // A short rattle every 700ms or so: quick left-right twitches, then rest.
+      // A continuous rattle: uneven left-right twitches with no rest.
       SequentialAnimation {
         id: rattle
         running: glyphButton.active
@@ -883,9 +894,9 @@ Panel {
         NumberAnimation { target: glyphText; property: "rotation"; to: -14; duration: 45 }
         NumberAnimation { target: glyphText; property: "rotation"; to: 12; duration: 70 }
         NumberAnimation { target: glyphText; property: "rotation"; to: -8; duration: 60 }
-        NumberAnimation { target: glyphText; property: "rotation"; to: 5; duration: 50 }
-        NumberAnimation { target: glyphText; property: "rotation"; to: 0; duration: 40 }
-        PauseAnimation { duration: 450 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: 10; duration: 55 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: -11; duration: 65 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: 6; duration: 50 }
         onRunningChanged: if (!running) glyphText.rotation = 0
       }
     }
