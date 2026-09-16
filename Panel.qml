@@ -43,9 +43,9 @@ Panel {
   readonly property bool loading: accountsProc.running || appsProc.running || logsProc.running || logQueue.length > 0
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
-  // Failed rows must read as red. Monochrome themes set their red to the
-  // foreground, which would hide a failure, so fall back to a fixed red.
-  readonly property color failedColor: (Qt.colorEqual(Color.urgent, foreground) || Qt.colorEqual(Color.urgent, Color.foreground)) ? "#c0392b" : Color.urgent
+  // Failed rows must read as red. Themes whose "red" is not actually red
+  // (see Model.failedColor) get a fixed red picked for the background.
+  readonly property color failedColor: Model.failedColor(Color.urgent.toString(), foreground.toString(), Color.background.toString())
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -307,7 +307,7 @@ Panel {
       queueLogs(apps.map(function(row){ return { appId: row.id, logId: row.actionLogId } }))
       return
     }
-    appsProc.accountName = String(accounts[accountCursor].name || "")
+    appsProc.accountName = Model.safeText(accounts[accountCursor].name)
     appsProc.command = [apiBin, "GET", "/accounts/" + accounts[accountCursor].id + "/apps"]
     appsProc.running = true
   }

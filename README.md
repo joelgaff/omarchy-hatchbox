@@ -52,7 +52,7 @@ op read "op://Private/Hatchbox/token" | ~/.config/omarchy/plugins/joelgaff.hatch
 
 ## What you get
 
-**One row per app.** Name, branch, the commit that is live, and the state of the newest deploy or restart. That state is read from the app's logs rather than from `last_deploy_at`, which Hatchbox only moves on success. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows your theme. Themes whose red is the same as their foreground (monochrome themes) get a fixed red instead, so a failure never hides.
+**One row per app.** Name, branch, the commit that is live, and the state of the newest deploy or restart. That state is read from the app's logs rather than from `last_deploy_at`, which Hatchbox only moves on success. An app whose latest deploy or restart failed gets a red name. Everything else, the bar icon included, follows your theme. Themes whose red slot holds something that is not red (monochrome, green, or blue themes) get a fixed red instead, so a failure never hides.
 
 **Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. The row then shows a spinner and polls that job until it settles, so a failed deploy turns red without a refresh. A restart only speaks for the row while it is running or has failed: a restart that completes does not clear a failed deploy, because the failing build is still what's live.
 

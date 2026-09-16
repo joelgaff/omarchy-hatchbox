@@ -1,5 +1,18 @@
 .pragma library
 
+// Remote strings (app, branch, and account names) reach labels, tooltips, and
+// the confirm dialog. Every sink in the shell kit renders plain text, but the
+// values are constrained here anyway so crafted metadata cannot carry markup,
+// control characters, or unbounded length into any text surface.
+function safeText(value, maxLength) {
+  var s = String(value === undefined || value === null ? "" : value)
+  s = s.replace(/<[^>]*>/g, "")
+  s = s.replace(/[\x00-\x1f\x7f-\x9f]/g, "")
+  s = s.replace(/\s+/g, " ").trim()
+  var cap = maxLength || 120
+  return s.length > cap ? s.slice(0, cap) : s
+}
+
 // Parse the array from GET /accounts/:id/apps into row objects the panel binds to.
 // Deploy state fields start empty; the panel fills them from the logs endpoint,
 // because last_deploy_at only moves on a successful deploy.
@@ -8,11 +21,11 @@ function parseApps(text, hideList) {
   var apps
   try { apps = JSON.parse(text) } catch (e) { return [] }
   if (!Array.isArray(apps)) return []
-  return apps.filter(function(a){ return hidden.indexOf(a.name) === -1 }).map(function(a) {
+  return apps.filter(function(a){ return a && typeof a === "object" && hidden.indexOf(String(a.name || "")) === -1 }).map(function(a) {
     return {
-      id: a.id,
-      name: String(a.name || ""),
-      branch: String(a.branch || ""),
+      id: Number(a.id) || 0,
+      name: safeText(a.name),
+      branch: safeText(a.branch),
       sha: a.last_deploy_sha ? String(a.last_deploy_sha).slice(0, 7) : "",
       dashboardUrl: "https://hatchbox.io/apps/" + a.id,
       state: "",
@@ -120,6 +133,51 @@ function describeFailure(stderrText, what) {
   if (status === "401") return "Hatchbox rejected the token"
   if (status !== "") return "Could not load " + what + " (HTTP " + status + ")"
   return "Could not reach Hatchbox"
+}
+
+// ---- Failure colour. Failed rows must read as red. Many themes give their
+// "red" slot a colour that is not red at all (green, blue, grey), which
+// would hide a failure, so the theme colour is used only when it is
+// visibly red; otherwise a fixed red is chosen for the background's brightness.
+function hexToRgb(value) {
+  var s = String(value || "").trim()
+  var m = s.match(/^#([0-9a-f]{2})?([0-9a-f]{6})$/i)
+  if (!m) return null
+  var h = m[2]
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+function hsl(rgb) {
+  var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255
+  var max = Math.max(r, g, b), min = Math.min(r, g, b)
+  var l = (max + min) / 2
+  var d = max - min
+  if (d === 0) return { h: 0, s: 0, l: l }
+  var sat = d / (1 - Math.abs(2 * l - 1))
+  var h
+  if (max === r) h = ((g - b) / d) % 6
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  h = h * 60
+  if (h < 0) h += 360
+  return { h: h, s: sat, l: l }
+}
+
+function looksRed(rgb) {
+  var c = hsl(rgb)
+  var hueIsRed = c.h <= 22 || c.h >= 335
+  return hueIsRed && c.s >= 0.3 && c.l >= 0.2 && c.l <= 0.8
+}
+
+function distance(a, b) {
+  return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2))
+}
+
+function failedColor(urgent, foreground, background) {
+  var u = hexToRgb(urgent), f = hexToRgb(foreground), bg = hexToRgb(background)
+  if (u && looksRed(u) && (!f || distance(u, f) > 60)) return urgent
+  var darkBackground = bg ? hsl(bg).l < 0.5 : true
+  return darkBackground ? "#f26d6d" : "#c0392b"
 }
 
 function relative(iso) {
