@@ -5,12 +5,23 @@
 #        hatchbox-api POST /apps/123/deploy '{"sha":"abc123"}'
 # Token lives in ~/.config/omarchy/hatchbox.json as {"token":"..."} (chmod 600),
 # or in $HATCHBOX_API_TOKEN. Never store it in shell.json.
-# The Authorization header goes to curl through a config file on stdin, so
-# the token never appears on a command line that /proc exposes to other users.
+#
+# Safety properties:
+#   - The Authorization header reaches curl through a config file on stdin,
+#     so the token never appears on a command line that /proc exposes.
+#   - Every response body, success or error, is streamed through a hard byte
+#     limit into a private temp file. Nothing larger than the limit is ever
+#     held in a shell variable or handed to the caller; an oversized body is
+#     rejected with a short error instead.
+#   - Error bodies are never passed through. Only the HTTP status and a short,
+#     bounded excerpt go to stderr.
 set -euo pipefail
 
 method="${1:?method}"; path="${2:?path}"; body="${3:-}"
 config="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/hatchbox.json"
+base="${HATCHBOX_API_BASE:-https://hatchbox.io/api/v1}"
+limit=$(( 512 * 1024 ))   # bytes; the largest legitimate response is a few KiB
+excerpt=200               # bytes of an error body worth showing
 
 token="${HATCHBOX_API_TOKEN:-}"
 if [[ -z "$token" && -f "$config" ]]; then
@@ -21,17 +32,54 @@ if [[ -z "$token" ]]; then
   exit 78
 fi
 
-args=(-sS --max-time 15 -X "$method"
+work="$(mktemp -d -p "${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}" hatchbox-api.XXXXXX)"
+trap 'rm -rf "$work"' EXIT
+resp="$work/body"
+meta="$work/meta"
+
+# curl may stop at max-filesize itself (exit 63) or head may stop one byte past
+# the limit; either way the response is rejected below.
+args=(-sS --max-time 15 --max-filesize $(( limit + 1 )) -X "$method"
   -H "Accept: application/json"
-  -w '\n%{http_code}'
+  -o -
+  -w '%{stderr}\n%{http_code}\n'
   --config -)
 [[ -n "$body" ]] && args+=(-H "Content-Type: application/json" -d "$body")
 
-out="$(printf 'header = "Authorization: Bearer %s"\n' "$token" | curl "${args[@]}" "https://hatchbox.io/api/v1${path}")"
-code="${out##*$'\n'}"
-json="${out%$'\n'*}"
+# curl streams the body to head, which stops reading one byte past the limit
+# so an oversized response is detected without ever being stored in full.
+# The status code goes to stderr via -w, captured separately in $meta.
+set +e
+printf 'header = "Authorization: Bearer %s"\n' "$token" \
+  | curl "${args[@]}" "${base}${path}" 2>"$meta" \
+  | head -c $(( limit + 1 )) > "$resp"
+curl_status=${PIPESTATUS[1]}
+set -e
 
-# Emit the body on stdout and the HTTP status on stderr so QML can branch on either.
-printf '%s\n' "$json"
+code="$(grep -oE '^[0-9]{3}$' "$meta" | tail -n 1 || true)"
+size=$(stat -c %s "$resp")
+
+if (( size > limit )) || [[ "$curl_status" == "63" ]]; then
+  echo "{\"error\":\"Response exceeded ${limit} bytes and was discarded\"}" >&2
+  echo "${code:-000}" >&2
+  exit 77
+fi
+
+if [[ -z "$code" || "$code" == "000" ]]; then
+  # Transport failure: curl's own message is in $meta; pass a bounded excerpt.
+  grep -v -E '^([0-9]{3})?$' "$meta" | head -c "$excerpt" | tr -d '\000' >&2; echo >&2
+  echo "000" >&2
+  exit "${curl_status:-1}"
+fi
+
+if [[ "$code" =~ ^2 ]]; then
+  cat "$resp"
+  [[ -s "$resp" && "$(tail -c 1 "$resp" | od -An -c | tr -d ' ')" != '\n' ]] && echo
+  echo "$code" >&2
+  exit 0
+fi
+
+# Non-2xx: a bounded excerpt only, never the full body.
+printf '{"error":"HTTP %s","excerpt":%s}\n' "$code" "$(head -c "$excerpt" "$resp" | tr -d '\000' | jq -Rs .)" >&2
 echo "$code" >&2
-[[ "$code" =~ ^2 ]]
+exit 1

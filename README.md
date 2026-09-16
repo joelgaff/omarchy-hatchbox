@@ -34,7 +34,7 @@ Click the bar icon. The first time, the panel asks for a Hatchbox API token: pas
 
 Tokens are created at [hatchbox.io/api_tokens](https://hatchbox.io/api_tokens). They are unscoped, so treat one like a password.
 
-The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, a command line, a log, or an IPC payload: the API wrapper feeds curl its Authorization header through a config file on stdin, so the token is not visible in the process list either. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script.
+The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, a command line, a log, or an IPC payload: the API wrapper feeds curl its Authorization header through a config file on stdin, so the token is not visible in the process list either. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script. The wrapper also streams every response through a hard 512 KiB limit and discards anything larger, passes error bodies on only as a short excerpt, and the panel runs one request at a time, so a misbehaving endpoint cannot exhaust memory.
 
 To replace the token later, click the key icon in the panel header or press `t`. To remove it:
 
