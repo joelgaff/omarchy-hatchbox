@@ -180,6 +180,18 @@ function failedColor(urgent, foreground, background) {
   return darkBackground ? "#f26d6d" : "#c0392b"
 }
 
+// Colour for a job in progress: the theme accent when it visibly pops
+// against the foreground, otherwise a fixed orange for the background.
+function busyColor(accent, foreground, background) {
+  var a = hexToRgb(accent), f = hexToRgb(foreground), bg = hexToRgb(background)
+  if (a) {
+    var c = hsl(a)
+    if (c.s >= 0.4 && c.l >= 0.25 && c.l <= 0.8 && (!f || distance(a, f) > 80)) return accent
+  }
+  var darkBackground = bg ? hsl(bg).l < 0.5 : true
+  return darkBackground ? "#f5a35c" : "#d9730d"
+}
+
 function relative(iso) {
   if (!iso) return "never"
   var t = Date.parse(iso); if (isNaN(t)) return ""

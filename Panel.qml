@@ -46,6 +46,9 @@ Panel {
   // Failed rows must read as red. Themes whose "red" is not actually red
   // (see Model.failedColor) get a fixed red picked for the background.
   readonly property color failedColor: Model.failedColor(Color.urgent.toString(), foreground.toString(), Color.background.toString())
+  // A job in progress gets a popping colour on its glyph: the theme accent
+  // when it stands out, else a fixed orange (see Model.busyColor).
+  readonly property color busyColor: Model.busyColor(Color.accent.toString(), foreground.toString(), Color.background.toString())
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -403,7 +406,9 @@ Panel {
 
   function updateTooltip() {
     var failed = apps.filter(function(row){ return row.failed }).length
+    var busy = apps.filter(function(row){ return row.busy }).length
     var text = apps.length + (apps.length === 1 ? " app" : " apps")
+    if (busy > 0) text += ", " + busy + " deploying"
     if (failed > 0) text += ", " + failed + " failed"
     tooltip = text
   }
@@ -565,7 +570,7 @@ Panel {
             Text {
               textFormat: Text.PlainText
               text: root.tooltip
-              color: root.anyFailed ? root.failedColor : root.dim
+              color: root.anyFailed ? root.failedColor : (root.anyBusy ? root.busyColor : root.dim)
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
             }
@@ -823,38 +828,19 @@ Panel {
         }
       }
 
-      Text {
-        id: busyGlyph
-        visible: appRow.busy
-        textFormat: Text.PlainText
-        text: "󰦖"
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.icon
-        transformOrigin: Item.Center
-        RotationAnimator on rotation {
-          running: appRow.busy
-          from: 0; to: 360
-          duration: 800
-          loops: Animation.Infinite
-        }
-      }
-
-      PanelActionButton {
-        visible: !appRow.busy
-        iconText: "󱓞"
-        tooltipText: "Deploy " + (appRow.app ? appRow.app.branch : "")
-        foreground: root.foreground
-        fontFamily: root.fontFamily
+      // Deploy and restart. While a job runs, the matching glyph shakes and
+      // takes the busy colour; the button stays in place but does nothing.
+      ActionGlyphButton {
+        glyph: "󱓞"
+        active: appRow.busy && !(appRow.app && appRow.app.isRestart)
+        tooltipText: active ? "Deploying" : "Deploy " + (appRow.app ? appRow.app.branch : "")
         onClicked: root.askDeploy(appRow.app)
       }
 
-      PanelActionButton {
-        visible: !appRow.busy
-        iconText: "󰜉"
-        tooltipText: "Restart"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
+      ActionGlyphButton {
+        glyph: "󰜉"
+        active: appRow.busy && !!(appRow.app && appRow.app.isRestart)
+        tooltipText: active ? "Restarting" : "Restart"
         onClicked: root.askRestart(appRow.app)
       }
 
@@ -864,6 +850,43 @@ Panel {
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: root.viewApp(appRow.app)
+      }
+    }
+  }
+
+  // PanelActionButton with the glyph drawn as a child, so only the glyph
+  // animates and the button's hover fill stays square and still.
+  component ActionGlyphButton: PanelActionButton {
+    id: glyphButton
+    property string glyph: ""
+    property bool active: false
+
+    iconText: ""
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+
+    Text {
+      id: glyphText
+      textFormat: Text.PlainText
+      anchors.centerIn: parent
+      text: glyphButton.glyph
+      color: glyphButton.active ? root.busyColor : (glyphButton._hot ? glyphButton.hoverColor : root.foreground)
+      font.family: root.fontFamily
+      font.pixelSize: glyphButton.fontSize
+      transformOrigin: Item.Center
+
+      // A short rattle every 700ms or so: quick left-right twitches, then rest.
+      SequentialAnimation {
+        id: rattle
+        running: glyphButton.active
+        loops: Animation.Infinite
+        NumberAnimation { target: glyphText; property: "rotation"; to: -14; duration: 45 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: 12; duration: 70 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: -8; duration: 60 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: 5; duration: 50 }
+        NumberAnimation { target: glyphText; property: "rotation"; to: 0; duration: 40 }
+        PauseAnimation { duration: 450 }
+        onRunningChanged: if (!running) glyphText.rotation = 0
       }
     }
   }
