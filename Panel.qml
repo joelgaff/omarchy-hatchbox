@@ -303,7 +303,7 @@ Panel {
 
   function fetchNextAccount() {
     if (accountCursor >= accounts.length) {
-      apps = Model.mergeState(pendingApps, apps)
+      apps = Model.sortByRecent(Model.mergeState(pendingApps, apps))
       pendingApps = []
       if (appIndex >= apps.length) appIndex = Math.max(0, apps.length - 1)
       updateTooltip()
@@ -351,8 +351,18 @@ Panel {
     pumpLogs()
   }
 
+  // Re-sort once a sweep has drained, keeping the cursor on the same app.
+  function resortApps() {
+    var row = cursorActive ? cursorRow() : null
+    apps = Model.sortByRecent(apps)
+    if (row) {
+      for (var i = 0; i < apps.length; i++) if (apps[i].id === row.id) { appIndex = i; break }
+    }
+  }
+
   function pumpLogs() {
-    if (logsProc.running || logQueue.length === 0) return
+    if (logsProc.running) return
+    if (logQueue.length === 0) { resortApps(); return }
     var entry = logQueue[0]
     logQueue = logQueue.slice(1)
     logsProc.appId = entry.appId
@@ -449,7 +459,7 @@ Panel {
       var logId = 0
       try { logId = Number(JSON.parse(String(stdout.text || "").trim()).id) || 0 } catch (e) {}
       root.updateRow(actionProc.appId, {
-        state: "pending", stateAgo: "just now", isRestart: actionProc.action === "restart",
+        state: "pending", stateAt: new Date().toISOString(), stateAgo: "just now", isRestart: actionProc.action === "restart",
         failed: false, busy: true, actionLogId: logId, busySince: Date.now()
       })
       actionFollowUp.appId = actionProc.appId

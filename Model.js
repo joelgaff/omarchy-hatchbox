@@ -28,7 +28,9 @@ function parseApps(text, hideList) {
       branch: safeText(a.branch),
       sha: a.last_deploy_sha ? String(a.last_deploy_sha).slice(0, 7) : "",
       dashboardUrl: "https://hatchbox.io/apps/" + a.id,
+      lastDeployAt: String(a.last_deploy_at || ""),
       state: "",
+      stateAt: "",
       stateAgo: "",
       isRestart: false,
       failed: false,
@@ -39,7 +41,7 @@ function parseApps(text, hideList) {
   })
 }
 
-var stateFields = ["state", "stateAgo", "isRestart", "failed", "busy", "actionLogId", "busySince"]
+var stateFields = ["state", "stateAt", "stateAgo", "isRestart", "failed", "busy", "actionLogId", "busySince"]
 
 // Carry deploy state across a refresh so a red row does not flicker back to
 // plain while the logs are refetched.
@@ -92,12 +94,14 @@ function parseLog(text) {
 // Row fields derived from a log entry. States: pending, processing,
 // completed, failed, aborted.
 function statePatch(log) {
-  if (!log) return { state: "unknown", stateAgo: "", isRestart: false, failed: false, busy: false, actionLogId: 0, busySince: 0 }
+  if (!log) return { state: "unknown", stateAt: "", stateAgo: "", isRestart: false, failed: false, busy: false, actionLogId: 0, busySince: 0 }
   var state = String(log.state || "")
   var busy = isBusyState(state)
+  var at = String(log.completed_at || log.started_at || log.created_at || "")
   return {
     state: state,
-    stateAgo: relative(log.completed_at || log.started_at || log.created_at || ""),
+    stateAt: at,
+    stateAgo: relative(at),
     isRestart: log.name === "Apps::Restart",
     failed: isFailedState(state),
     busy: busy,
@@ -133,6 +137,20 @@ function describeFailure(stderrText, what) {
   if (status === "401") return "Hatchbox rejected the token"
   if (status !== "") return "Could not load " + what + " (HTTP " + status + ")"
   return "Could not reach Hatchbox"
+}
+
+// Newest activity first: the latest deploy or restart seen in the logs,
+// else Hatchbox's last successful deploy time. Apps with neither sort last.
+function activityTime(row) {
+  var t = Date.parse(row.stateAt || row.lastDeployAt || "")
+  return isNaN(t) ? 0 : t
+}
+
+function sortByRecent(rows) {
+  return rows.slice().sort(function(a, b) {
+    var d = activityTime(b) - activityTime(a)
+    return d !== 0 ? d : String(a.name).localeCompare(String(b.name))
+  })
 }
 
 // ---- Failure colour. Failed rows must read as red. Many themes give their
