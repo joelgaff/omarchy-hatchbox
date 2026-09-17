@@ -14,7 +14,7 @@ omarchy plugin add https://github.com/joelgaff/omarchy-hatchbox.git --enable
 
 Requires Omarchy 4. No sudo or pkexec is required, and nothing is downloaded at runtime. The only runtime dependencies are `curl` and `jq`, which every Omarchy install has. The panel talks to the Hatchbox API at hatchbox.io over HTTPS with your token, and to nothing else.
 
-The widget lands in the right section of the bar. Move it with `omarchy bar move`, or from the bar's own settings panel.
+The widget lands in the right section of the bar. Move it with `omarchy bar move`.
 
 To remove it again:
 
@@ -75,7 +75,14 @@ Middle-click the bar icon to refresh without opening the panel, or use the refre
 
 ## Settings
 
-Set per widget from the bar settings panel, or in the widget's entry in `~/.config/omarchy/shell.json`.
+Set with `omarchy bar set`, which writes the widget's entry in `~/.config/omarchy/shell.json` and applies immediately:
+
+```bash
+omarchy bar set joelgaff.hatchbox sortBy Name
+omarchy bar set joelgaff.hatchbox sortBy "Most recent deploy"
+omarchy bar set joelgaff.hatchbox refreshMinutes 2
+omarchy bar set joelgaff.hatchbox hideApps "staging,scratch"
+```
 
 | Key | Default | Meaning |
 | --- | --- | --- |
