@@ -36,7 +36,7 @@ Tokens are created at [hatchbox.io/api_tokens](https://hatchbox.io/api_tokens). 
 
 The panel hands the token to `bin/hatchbox-token` over stdin, which writes `~/.config/omarchy/hatchbox.json` with mode 600. It never goes into `shell.json`, a command line, a log, or an IPC payload: the API wrapper feeds curl its Authorization header through a config file on stdin, so the token is not visible in the process list either. `bin/hatchbox-api` is the only place it is read, and all QML goes through that script. The wrapper also streams every response through a hard 512 KiB limit and discards anything larger, passes error bodies on only as a short excerpt, and the panel runs one request at a time, so a misbehaving endpoint cannot exhaust memory.
 
-To replace the token later, click the key icon in the panel header or press `t`. To remove it:
+To replace the token later, open the gear menu in the panel header and choose Replace token, or press `t`. To remove it:
 
 ```bash
 ~/.config/omarchy/plugins/joelgaff.hatchbox/bin/hatchbox-token clear
@@ -56,7 +56,7 @@ op read "op://Private/Hatchbox/token" | ~/.config/omarchy/plugins/joelgaff.hatch
 
 **Three actions per row.** Deploy the branch, restart, and open the app in Hatchbox. Deploy and restart ask for confirmation first. While a job runs, that row's rocket (or restart glyph) rattles and takes the theme accent, or orange when the accent would not stand out, and the panel polls the job until it settles, so a failed deploy turns red without a refresh. Opening the panel refreshes, so a deploy Hatchbox started from a git push shows the same way. A restart only speaks for the row while it is running or has failed: a restart that completes does not clear a failed deploy, because the failing build is still what's live.
 
-**A header that works.** "13 apps, 5 failed", in red when anything has failed, next to a refresh button that spins while the list reloads and a key button for replacing the token.
+**A header that works.** "13 apps, 5 failed", in red when anything has failed, next to a refresh button that spins while the list reloads and a gear that opens the settings section: sort order and the API token.
 
 **Keyboard all the way.** Bind a hotkey to `omarchy-shell joelgaff.hatchbox toggle` and never touch the mouse:
 
@@ -75,7 +75,7 @@ Middle-click the bar icon to refresh without opening the panel, or use the refre
 
 ## Settings
 
-Set with `omarchy bar set`, which writes the widget's entry in `~/.config/omarchy/shell.json` and applies immediately:
+Sort order and the API token live behind the gear in the panel header. Everything is also settable with `omarchy bar set`, which writes the widget's entry in `~/.config/omarchy/shell.json` and applies immediately:
 
 ```bash
 omarchy bar set joelgaff.hatchbox sortBy Name
@@ -97,7 +97,8 @@ omarchy-shell joelgaff.hatchbox toggle
 omarchy-shell joelgaff.hatchbox open
 omarchy-shell joelgaff.hatchbox close
 omarchy-shell joelgaff.hatchbox refresh
-omarchy-shell joelgaff.hatchbox setup    # open the panel on the token form
+omarchy-shell joelgaff.hatchbox setup     # open the panel on the token form
+omarchy-shell joelgaff.hatchbox settings  # open the panel on the settings section
 ```
 
 ## Development

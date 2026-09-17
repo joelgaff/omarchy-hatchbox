@@ -102,6 +102,31 @@ Panel {
     })
   }
 
+  // ---- Settings section, toggled by the gear in the header. Sort order is
+  // persisted to the widget's shell.json entry the way the clock panel does
+  // it: applied locally first, then written through the bar's shell.
+  property bool settingsOpen: false
+
+  function toggleSettings() {
+    settingsOpen = !settingsOpen
+    if (!settingsOpen && editingToken) cancelEditingToken()
+  }
+
+  function persistSettings(values) {
+    var entry = { id: root.moduleName }
+    for (var existing in root.settings) if (existing !== "id") entry[existing] = root.settings[existing]
+    for (var key in values) entry[key] = values[key]
+    root.settings = entry
+    if (root.hostWidget && "settings" in root.hostWidget) root.hostWidget.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  }
+
+  function setSortBy(value) {
+    if (value === sortBy) return
+    persistSettings({ sortBy: value })
+  }
+
   // ---- Token setup. The form opens when the API reports a missing or
   // rejected token, once per problem (dismissing it with Esc keeps it shut
   // until the next save), or on demand via the key button, `t`, or the
@@ -119,6 +144,7 @@ Panel {
   }
 
   function startEditingToken() {
+    settingsOpen = true
     editingToken = true
     savingToken = false
     tokenError = ""
@@ -229,6 +255,7 @@ Panel {
     setCenterHoverRevealSuppressed(false)
     if (root.editingToken) root.cancelEditingToken()
     if (root.confirmOpen) root.closeConfirm()
+    root.settingsOpen = false
     root.controller.hide()
   }
 
@@ -520,6 +547,7 @@ Panel {
     function toggle(): void { root.toggle() }
     function refresh(): void { root.refreshAll() }
     function setup(): void { root.openFromHotkey(); root.startEditingToken() }
+    function settings(): void { root.openFromHotkey(); root.settingsOpen = true }
   }
 
   KeyboardPanel {
@@ -616,11 +644,11 @@ Panel {
               }
             }
             PanelActionButton {
-              iconText: "󰌆"
-              tooltipText: root.editingToken ? "Cancel" : "Change API token"
+              iconText: "󰒓"
+              tooltipText: root.settingsOpen ? "Close settings" : "Settings"
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: root.toggleEditingToken()
+              onClicked: root.toggleSettings()
             }
           }
 
@@ -635,11 +663,76 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          // ---- Token setup form.
+          // ---- Settings section: sort order and the API token.
           Column {
-            visible: root.editingToken
+            visible: root.settingsOpen
             width: parent.width
             spacing: Style.spacing.md
+
+            PanelSectionHeader {
+              text: "SETTINGS"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: Style.spacing.lg
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Sort apps by"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                Layout.preferredWidth: Style.space(130)
+              }
+              ButtonGroup {
+                Layout.fillWidth: true
+                options: ["Most recent deploy", "Name"]
+                value: root.sortBy
+                focusable: false
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onChanged: function(value) { root.setSortBy(value) }
+              }
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: Style.spacing.lg
+              visible: !root.editingToken
+
+              Text {
+                textFormat: Text.PlainText
+                text: "API token"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                Layout.preferredWidth: Style.space(130)
+              }
+              Button {
+                text: root.needsToken ? "Paste a token" : "Replace token"
+                iconText: "󰌆"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.startEditingToken()
+              }
+              Text {
+                textFormat: Text.PlainText
+                text: root.needsToken ? "none configured" : "configured"
+                color: root.needsToken ? root.failedColor : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                Layout.fillWidth: true
+              }
+            }
+
+            // ---- Token form, shown in place of the token row while editing.
+            Column {
+              visible: root.editingToken
+              width: parent.width
+              spacing: Style.spacing.md
 
             Text {
               textFormat: Text.PlainText
@@ -703,10 +796,12 @@ Panel {
             }
           }
 
+          }
+
           Text {
             visible: root.needsToken && !root.editingToken
             textFormat: Text.PlainText
-            text: "Press t or click the key to paste a token"
+            text: "Open settings (gear) or press t to paste a token"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
