@@ -883,6 +883,11 @@ Panel {
     property int rowIndex: 0
     readonly property bool failed: app ? app.failed === true : false
     readonly property bool busy: app ? app.busy === true : false
+    // Two phases of a job. Queued: Hatchbox has accepted it but nothing runs
+    // yet, so the whole row breathes red. Running: the rocket rattles and the
+    // text pulses in the busy colour.
+    readonly property bool queued: busy && app.state === "pending"
+    readonly property bool running: busy && !queued
     readonly property string stateText: Model.stateLabel(app)
 
     hasCursor: root.cursorActive && root.appIndex === rowIndex
@@ -890,11 +895,27 @@ Panel {
 
     implicitHeight: rowContent.implicitHeight + Style.spacing.rowPaddingX
 
-    // While a job runs, the row's text breathes slowly between the theme
-    // foreground and the busy colour, so the whole row reads as active.
+    // Queued: a red wash over the row that breathes slowly.
+    Rectangle {
+      id: queuedWash
+      anchors.fill: parent
+      radius: Style.cornerRadius
+      color: root.failedColor
+      opacity: 0
+      visible: appRow.queued
+      SequentialAnimation on opacity {
+        running: appRow.queued
+        loops: Animation.Infinite
+        NumberAnimation { to: 0.32; duration: 1200; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 0.06; duration: 1200; easing.type: Easing.InOutSine }
+        onRunningChanged: if (!running) queuedWash.opacity = 0
+      }
+    }
+
+    // Running: the row's text breathes between the foreground and the busy colour.
     property color pulseColor: root.foreground
     SequentialAnimation {
-      running: appRow.busy
+      running: appRow.running
       loops: Animation.Infinite
       ColorAnimation { target: appRow; property: "pulseColor"; to: root.busyColor; duration: 1100; easing.type: Easing.InOutSine }
       ColorAnimation { target: appRow; property: "pulseColor"; to: root.foreground; duration: 1100; easing.type: Easing.InOutSine }
@@ -926,7 +947,7 @@ Panel {
           textFormat: Text.PlainText
           Layout.fillWidth: true
           text: appRow.app ? appRow.app.name : ""
-          color: appRow.failed ? root.failedColor : (appRow.busy ? appRow.pulseColor : root.foreground)
+          color: appRow.failed ? root.failedColor : (appRow.running ? appRow.pulseColor : root.foreground)
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           elide: Text.ElideRight
@@ -939,7 +960,7 @@ Panel {
             ? appRow.app.branch + " @ " + (appRow.app.sha || "no deploy")
               + (appRow.stateText !== "" ? "   " + appRow.stateText : "")
             : ""
-          color: appRow.failed ? root.failedColor : (appRow.busy ? appRow.pulseColor : root.dim)
+          color: appRow.failed ? root.failedColor : (appRow.running ? appRow.pulseColor : root.dim)
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
@@ -950,15 +971,15 @@ Panel {
       // takes the busy colour; the button stays in place but does nothing.
       ActionGlyphButton {
         glyph: "󱓞"
-        active: appRow.busy && !(appRow.app && appRow.app.isRestart)
-        tooltipText: active ? "Deploying" : "Deploy " + (appRow.app ? appRow.app.branch : "")
+        active: appRow.running && !(appRow.app && appRow.app.isRestart)
+        tooltipText: appRow.busy ? "Deploying" : "Deploy " + (appRow.app ? appRow.app.branch : "")
         onClicked: root.askDeploy(appRow.app)
       }
 
       ActionGlyphButton {
         glyph: "󰜉"
-        active: appRow.busy && !!(appRow.app && appRow.app.isRestart)
-        tooltipText: active ? "Restarting" : "Restart"
+        active: appRow.running && !!(appRow.app && appRow.app.isRestart)
+        tooltipText: appRow.busy ? "Restarting" : "Restart"
         onClicked: root.askRestart(appRow.app)
       }
 
