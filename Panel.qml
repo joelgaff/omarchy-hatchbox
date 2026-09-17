@@ -927,52 +927,47 @@ Panel {
       anchors.fill: parent
       running: appRow.running || smokeTail.running
       paused: !running
+      clip: true
       z: 1
 
-      // Many faint, overlapping puffs read as a plume; a few bright ones read
-      // as bubbles. So: low alpha, almost no colour variation, a soft
-      // texture, and puffs that grow as they drift and rise a little.
+      // Chunky puffs: a 16px pixel-art blob drawn near its native size so the
+      // blocks stay visible, in a few discrete sizes, with almost no colour
+      // variation so the plume reads as one material.
       ImageParticle {
         source: Qt.resolvedUrl("assets/smoke.png")
         color: root.dim
         colorVariation: 0.03
-        alpha: 0.14
-        alphaVariation: 0.05
+        alpha: 0.55
+        alphaVariation: 0.15
         entryEffect: ImageParticle.Fade
       }
 
+      // Out of the back of the rocket, which for this glyph is down and to
+      // the left. Buoyancy (an upward pull) turns the dive into a curve that
+      // bottoms out near the row's floor, then the smoke billows up and
+      // drifts left until it leaves the row.
       Emitter {
         id: smokeEmitter
         enabled: appRow.running
-        // Just left of the rocket glyph, at its vertical centre.
-        x: rowContent.x + deployButton.x + deployButton.width * 0.3
-        y: rowContent.y + deployButton.y + deployButton.height * 0.5
-        width: 1; height: Style.space(4)
-        emitRate: 10
+        x: rowContent.x + deployButton.x + deployButton.width * 0.28
+        y: rowContent.y + deployButton.y + deployButton.height * 0.68
+        width: Style.space(2); height: Style.space(2)
+        emitRate: 20
         lifeSpan: appRow.smokeLifeMs
-        lifeSpanVariation: 900
-        maximumEmitted: 40
-        size: Style.space(8)
-        endSize: Style.space(24)
-        sizeVariation: Style.space(4)
-        velocity: AngleDirection { angle: 180; angleVariation: 10; magnitude: Style.space(30); magnitudeVariation: Style.space(10) }
-        // Drifts left and rises a touch, the way smoke does.
-        acceleration: AngleDirection { angle: 200; magnitude: Style.space(8) }
+        lifeSpanVariation: 700
+        maximumEmitted: 60
+        size: Style.space(6)
+        endSize: Style.space(14)
+        sizeVariation: Style.space(3)
+        velocity: AngleDirection { angle: 135; angleVariation: 14; magnitude: Style.space(56); magnitudeVariation: Style.space(12) }
+        acceleration: AngleDirection { angle: 262; magnitude: Style.space(46) }
       }
 
       Wander {
-        xVariance: Style.space(10)
-        yVariance: Style.space(14)
-        pace: Style.space(30)
+        xVariance: Style.space(6)
+        yVariance: Style.space(5)
+        pace: Style.space(20)
       }
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onEntered: root.setCursor(appRow.rowIndex)
-      onClicked: root.viewApp(appRow.app)
     }
 
     RowLayout {
