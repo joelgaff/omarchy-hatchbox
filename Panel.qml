@@ -1055,7 +1055,8 @@ Panel {
       }
 
       ActionGlyphButton {
-        glyph: "󰜉"
+        // Clockwise, like the refresh glyph in the header.
+        glyph: "󰑓"
         active: appRow.running && !!(appRow.app && appRow.app.isRestart)
         tooltipText: appRow.busy ? "Restarting" : "Restart"
         onClicked: root.askRestart(appRow.app)
