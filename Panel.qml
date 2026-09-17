@@ -54,6 +54,8 @@ Panel {
 
   readonly property int refreshMinutes: Math.max(1, parseInt(setting("refreshMinutes", 5), 10) || 5)
   readonly property string hideApps: String(setting("hideApps", ""))
+  readonly property string sortBy: String(setting("sortBy", "Most recent deploy"))
+  onSortByChanged: resortApps()
   readonly property string apiBin: Qt.resolvedUrl("bin/hatchbox-api").toString().replace("file://", "")
   readonly property string tokenBin: Qt.resolvedUrl("bin/hatchbox-token").toString().replace("file://", "")
 
@@ -303,7 +305,7 @@ Panel {
 
   function fetchNextAccount() {
     if (accountCursor >= accounts.length) {
-      apps = Model.sortByRecent(Model.mergeState(pendingApps, apps))
+      apps = Model.sortApps(Model.mergeState(pendingApps, apps), sortBy)
       pendingApps = []
       if (appIndex >= apps.length) appIndex = Math.max(0, apps.length - 1)
       updateTooltip()
@@ -354,7 +356,7 @@ Panel {
   // Re-sort once a sweep has drained, keeping the cursor on the same app.
   function resortApps() {
     var row = cursorActive ? cursorRow() : null
-    apps = Model.sortByRecent(apps)
+    apps = Model.sortApps(apps, sortBy)
     if (row) {
       for (var i = 0; i < apps.length; i++) if (apps[i].id === row.id) { appIndex = i; break }
     }

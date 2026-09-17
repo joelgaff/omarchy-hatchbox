@@ -79,6 +79,7 @@ Set per widget from the bar settings panel, or in the widget's entry in `~/.conf
 
 | Key | Default | Meaning |
 | --- | --- | --- |
+| `sortBy` | `Most recent deploy` | Row order: newest deploy or restart first, or `Name` |
 | `refreshMinutes` | `5` | How often to poll |
 | `hideApps` | `""` | Comma-separated app names to leave out |
 

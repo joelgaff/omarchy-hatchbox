@@ -5,18 +5,49 @@
   "version": "1.0.0",
   "author": "Joel Gaff, Jr.",
   "description": "Monitor and manage Hatchbox.io app deploys from the bar",
-  "kinds": ["bar-widget"],
-  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
   "barWidget": {
     "displayName": "Hatchbox",
     "description": "Deploy status with deploy, restart, and open actions for Hatchbox apps",
     "category": "Info",
     "allowMultiple": false,
     "defaultSection": "right",
-    "defaults": { "refreshMinutes": 5, "hideApps": "" },
+    "defaults": {
+      "refreshMinutes": 5,
+      "hideApps": "",
+      "sortBy": "Most recent deploy"
+    },
     "schema": [
-      { "key": "refreshMinutes", "type": "integer", "label": "Refresh (minutes)" },
-      { "key": "hideApps", "type": "string", "label": "Hide apps (comma-separated names)" }
+      {
+        "key": "sortBy",
+        "type": "enum",
+        "label": "Sort apps by",
+        "options": [
+          "Most recent deploy",
+          "Name"
+        ],
+        "defaultValue": "Most recent deploy"
+      },
+      {
+        "key": "refreshMinutes",
+        "type": "integer",
+        "label": "Refresh (minutes)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 5
+      },
+      {
+        "key": "hideApps",
+        "type": "string",
+        "label": "Hide apps (comma-separated names)",
+        "defaultValue": ""
+      }
     ]
   }
 }

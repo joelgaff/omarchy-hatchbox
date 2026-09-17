@@ -153,6 +153,18 @@ function sortByRecent(rows) {
   })
 }
 
+function sortByName(rows) {
+  return rows.slice().sort(function(a, b) {
+    return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" })
+  })
+}
+
+// The "Sort apps by" setting holds one of the option labels from the
+// manifest; anything unrecognised falls back to most recent first.
+function sortApps(rows, mode) {
+  return String(mode || "").toLowerCase().indexOf("name") === 0 ? sortByName(rows) : sortByRecent(rows)
+}
+
 // ---- Failure colour. Failed rows must read as red. Many themes give their
 // "red" slot a colour that is not red at all (green, blue, grey), which
 // would hide a failure, so the theme colour is used only when it is
