@@ -930,15 +930,14 @@ Panel {
       clip: true
       z: 1
 
-      // Chunky puffs: a 16px pixel-art blob drawn near its native size so the
-      // blocks stay visible, in a few discrete sizes, with almost no colour
-      // variation so the plume reads as one material.
+      // Pixel exhaust: many small hard-edged squares in a few grey shades,
+      // rather than a handful of soft clouds.
       ImageParticle {
         source: Qt.resolvedUrl("assets/smoke.png")
         color: root.dim
-        colorVariation: 0.03
-        alpha: 0.55
-        alphaVariation: 0.15
+        colorVariation: 0.08
+        alpha: 0.7
+        alphaVariation: 0.25
         entryEffect: ImageParticle.Fade
       }
 
@@ -952,21 +951,21 @@ Panel {
         x: rowContent.x + deployButton.x + deployButton.width * 0.28
         y: rowContent.y + deployButton.y + deployButton.height * 0.68
         width: Style.space(2); height: Style.space(2)
-        emitRate: 20
+        emitRate: 55
         lifeSpan: appRow.smokeLifeMs
         lifeSpanVariation: 700
-        maximumEmitted: 60
-        size: Style.space(6)
-        endSize: Style.space(14)
-        sizeVariation: Style.space(3)
-        velocity: AngleDirection { angle: 135; angleVariation: 14; magnitude: Style.space(56); magnitudeVariation: Style.space(12) }
+        maximumEmitted: 160
+        size: Style.space(3)
+        endSize: Style.space(5)
+        sizeVariation: Style.space(2)
+        velocity: AngleDirection { angle: 135; angleVariation: 18; magnitude: Style.space(56); magnitudeVariation: Style.space(12) }
         acceleration: AngleDirection { angle: 262; magnitude: Style.space(46) }
       }
 
       Wander {
-        xVariance: Style.space(6)
-        yVariance: Style.space(5)
-        pace: Style.space(20)
+        xVariance: Style.space(10)
+        yVariance: Style.space(8)
+        pace: Style.space(30)
       }
     }
 
