@@ -899,21 +899,22 @@ Panel {
 
     implicitHeight: rowContent.implicitHeight + Style.spacing.rowPaddingX
 
-    // Queued: a red wash over the row that breathes slowly.
+    // Queued: a wash over the row in the busy colour, pulsing, so queued and
+    // running share one colour family and red stays reserved for failure.
     Rectangle {
       id: queuedWash
       anchors.fill: parent
       radius: Style.cornerRadius
-      color: root.failedColor
+      color: root.busyColor
       opacity: 0
       visible: appRow.queued
-      // A slow, even breath: two seconds up, two seconds down, starting
-      // from the resting level so the first stroke is no faster than the rest.
+      // An even breath, 0.7 seconds each way, starting from the resting
+      // level so the first stroke is no faster than the rest.
       SequentialAnimation on opacity {
         running: appRow.queued
         loops: Animation.Infinite
-        NumberAnimation { from: 0.06; to: 0.3; duration: 2000; easing.type: Easing.InOutQuad }
-        NumberAnimation { from: 0.3; to: 0.06; duration: 2000; easing.type: Easing.InOutQuad }
+        NumberAnimation { from: 0.05; to: 0.24; duration: 700; easing.type: Easing.InOutQuad }
+        NumberAnimation { from: 0.24; to: 0.05; duration: 700; easing.type: Easing.InOutQuad }
         onRunningChanged: if (!running) queuedWash.opacity = 0
       }
     }
