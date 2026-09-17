@@ -889,6 +889,9 @@ Panel {
     // text pulses in the busy colour.
     readonly property bool queued: busy && app.state === "pending"
     readonly property bool running: busy && !queued
+    readonly property bool isRestart: !!(app && app.isRestart)
+    // Only a deploy fires the rocket; a restart just spins its own arrow.
+    readonly property bool exhaustRunning: running && !isRestart
     readonly property string stateText: Model.stateLabel(app)
 
     hasCursor: root.cursorActive && root.appIndex === rowIndex
@@ -904,11 +907,13 @@ Panel {
       color: root.failedColor
       opacity: 0
       visible: appRow.queued
+      // A slow, even breath: two seconds up, two seconds down, starting
+      // from the resting level so the first stroke is no faster than the rest.
       SequentialAnimation on opacity {
         running: appRow.queued
         loops: Animation.Infinite
-        NumberAnimation { to: 0.32; duration: 1200; easing.type: Easing.InOutSine }
-        NumberAnimation { to: 0.06; duration: 1200; easing.type: Easing.InOutSine }
+        NumberAnimation { from: 0.06; to: 0.3; duration: 2000; easing.type: Easing.InOutQuad }
+        NumberAnimation { from: 0.3; to: 0.06; duration: 2000; easing.type: Easing.InOutQuad }
         onRunningChanged: if (!running) queuedWash.opacity = 0
       }
     }
@@ -919,19 +924,19 @@ Panel {
     // row. When the job ends the emitter stops and the remaining puffs
     // live out their lifespan and fade, then the system sleeps.
     readonly property int smokeLifeMs: 3600
-    onRunningChanged: if (!running) smokeTail.restart()
+    onExhaustRunningChanged: if (!exhaustRunning) smokeTail.restart()
     Timer { id: smokeTail; interval: appRow.smokeLifeMs + 1400 }
 
     // 1 while the job runs; eases to 0 over 1.2s after it ends. Emit rates
     // and particle alpha follow it, so the exhaust and streaks thin out and
     // fade rather than stopping dead.
-    property real wind: running ? 1 : 0
+    property real wind: exhaustRunning ? 1 : 0
     Behavior on wind { NumberAnimation { duration: 1200; easing.type: Easing.OutQuad } }
 
     ParticleSystem {
       id: smoke
       anchors.fill: parent
-      running: appRow.running || smokeTail.running
+      running: appRow.exhaustRunning || smokeTail.running
       paused: !running
       clip: true
       z: 1
@@ -1049,15 +1054,17 @@ Panel {
       ActionGlyphButton {
         id: deployButton
         glyph: "󱓞"
-        active: appRow.running && !(appRow.app && appRow.app.isRestart)
+        active: appRow.exhaustRunning
         tooltipText: appRow.busy ? "Deploying" : "Deploy " + (appRow.app ? appRow.app.branch : "")
         onClicked: root.askDeploy(appRow.app)
       }
 
       ActionGlyphButton {
-        // Clockwise, like the refresh glyph in the header.
+        // Clockwise, like the refresh glyph in the header. Spins rather
+        // than rattles while a restart runs.
         glyph: "󰑓"
-        active: appRow.running && !!(appRow.app && appRow.app.isRestart)
+        active: appRow.running && appRow.isRestart
+        spins: true
         tooltipText: appRow.busy ? "Restarting" : "Restart"
         onClicked: root.askRestart(appRow.app)
       }
@@ -1078,6 +1085,8 @@ Panel {
     id: glyphButton
     property string glyph: ""
     property bool active: false
+    // true: a steady clockwise spin while active; false: the rattle.
+    property bool spins: false
 
     iconText: ""
     foreground: root.foreground
@@ -1093,10 +1102,18 @@ Panel {
       font.pixelSize: glyphButton.fontSize
       transformOrigin: Item.Center
 
+      RotationAnimator on rotation {
+        running: glyphButton.active && glyphButton.spins
+        from: 0; to: 360
+        duration: 900
+        loops: Animation.Infinite
+        onRunningChanged: if (!running) glyphText.rotation = 0
+      }
+
       // A continuous rattle: uneven left-right twitches with no rest.
       SequentialAnimation {
         id: rattle
-        running: glyphButton.active
+        running: glyphButton.active && !glyphButton.spins
         loops: Animation.Infinite
         NumberAnimation { target: glyphText; property: "rotation"; to: -14; duration: 45 }
         NumberAnimation { target: glyphText; property: "rotation"; to: 12; duration: 70 }
