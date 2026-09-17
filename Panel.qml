@@ -920,7 +920,13 @@ Panel {
     // live out their lifespan and fade, then the system sleeps.
     readonly property int smokeLifeMs: 3600
     onRunningChanged: if (!running) smokeTail.restart()
-    Timer { id: smokeTail; interval: appRow.smokeLifeMs + 1200 }
+    Timer { id: smokeTail; interval: appRow.smokeLifeMs + 1400 }
+
+    // 1 while the job runs; eases to 0 over 1.2s after it ends. Emit rates
+    // and particle alpha follow it, so the exhaust and streaks thin out and
+    // fade rather than stopping dead.
+    property real wind: running ? 1 : 0
+    Behavior on wind { NumberAnimation { duration: 1200; easing.type: Easing.OutQuad } }
 
     ParticleSystem {
       id: smoke
@@ -931,41 +937,72 @@ Panel {
       z: 1
 
       // Pixel exhaust: many small hard-edged squares in a few grey shades,
-      // rather than a handful of soft clouds.
+      // shot straight out of the rocket's tail (down and to the left for
+      // this glyph) until they leave the row.
       ImageParticle {
+        groups: ["exhaust"]
         source: Qt.resolvedUrl("assets/smoke.png")
         color: root.dim
         colorVariation: 0.08
-        alpha: 0.8
-        alphaVariation: 0.25
+        alpha: 0.8 * appRow.wind
+        alphaVariation: 0.25 * appRow.wind
         entryEffect: ImageParticle.Fade
       }
 
-      // Out of the back of the rocket, which for this glyph is down and to
-      // the left. Buoyancy (an upward pull) turns the dive into a curve that
-      // bottoms out near the row's floor, then the smoke billows up and
-      // drifts left until it leaves the row.
       Emitter {
         id: smokeEmitter
-        enabled: appRow.running
+        group: "exhaust"
+        enabled: appRow.wind > 0.02
         x: rowContent.x + deployButton.x + deployButton.width * 0.28
         y: rowContent.y + deployButton.y + deployButton.height * 0.68
         width: Style.space(2); height: Style.space(2)
-        emitRate: 90
+        emitRate: 130 * appRow.wind
         lifeSpan: appRow.smokeLifeMs
         lifeSpanVariation: 700
-        maximumEmitted: 260
-        size: Style.space(2)
-        endSize: Style.space(3)
-        sizeVariation: Style.space(1)
-        velocity: AngleDirection { angle: 135; angleVariation: 18; magnitude: Style.space(56); magnitudeVariation: Style.space(12) }
-        acceleration: AngleDirection { angle: 262; magnitude: Style.space(46) }
+        maximumEmitted: 360
+        size: Style.spaceReal(1.2)
+        endSize: Style.spaceReal(1.2)
+        sizeVariation: Style.spaceReal(0.6)
+        velocity: AngleDirection { angle: 135; angleVariation: 9; magnitude: Style.space(56); magnitudeVariation: Style.space(14) }
       }
 
       Wander {
-        xVariance: Style.space(10)
-        yVariance: Style.space(8)
-        pace: Style.space(30)
+        groups: ["exhaust"]
+        xVariance: Style.space(6)
+        yVariance: Style.space(6)
+        pace: Style.space(24)
+      }
+
+      // Star streaks: thin lines at the rocket's angle passing close by it,
+      // a touch slower than the exhaust so the rocket reads as accelerating.
+      // autoRotation aligns each streak with its own velocity.
+      ImageParticle {
+        groups: ["streaks"]
+        source: Qt.resolvedUrl("assets/streak.png")
+        color: root.dim
+        colorVariation: 0.05
+        alpha: 0.6 * appRow.wind
+        alphaVariation: 0.2 * appRow.wind
+        autoRotation: true
+        entryEffect: ImageParticle.Fade
+      }
+
+      Emitter {
+        group: "streaks"
+        enabled: appRow.wind > 0.02
+        // A box around the rocket. Short lives keep the streaks near it.
+        x: rowContent.x + deployButton.x + deployButton.width * 0.5 - Style.space(26)
+        y: -Style.space(4)
+        width: Style.space(52)
+        height: smoke.height + Style.space(8)
+        emitRate: 12 * appRow.wind
+        lifeSpan: 900
+        lifeSpanVariation: 300
+        maximumEmitted: 14
+        size: Style.space(14)
+        endSize: Style.space(18)
+        sizeVariation: Style.space(5)
+        velocity: AngleDirection { angle: 135; angleVariation: 2; magnitude: Style.space(40); magnitudeVariation: Style.space(8) }
       }
     }
 
