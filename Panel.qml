@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Particles
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -912,14 +913,58 @@ Panel {
       }
     }
 
-    // Running: the row's text breathes between the foreground and the busy colour.
-    property color pulseColor: root.foreground
-    SequentialAnimation {
-      running: appRow.running
-      loops: Animation.Infinite
-      ColorAnimation { target: appRow; property: "pulseColor"; to: root.busyColor; duration: 1100; easing.type: Easing.InOutSine }
-      ColorAnimation { target: appRow; property: "pulseColor"; to: root.foreground; duration: 1100; easing.type: Easing.InOutSine }
-      onRunningChanged: if (!running) appRow.pulseColor = root.foreground
+    // Running: smoke billows out of the rocket and drifts left across the
+    // row while the job runs. The emitter caps how many puffs are alive, so
+    // a long deploy settles into a steady plume rather than filling the
+    // row. When the job ends the emitter stops and the remaining puffs
+    // live out their lifespan and fade, then the system sleeps.
+    readonly property int smokeLifeMs: 3600
+    onRunningChanged: if (!running) smokeTail.restart()
+    Timer { id: smokeTail; interval: appRow.smokeLifeMs + 1200 }
+
+    ParticleSystem {
+      id: smoke
+      anchors.fill: parent
+      running: appRow.running || smokeTail.running
+      paused: !running
+      z: 1
+
+      // Many faint, overlapping puffs read as a plume; a few bright ones read
+      // as bubbles. So: low alpha, almost no colour variation, a soft
+      // texture, and puffs that grow as they drift and rise a little.
+      ImageParticle {
+        source: Qt.resolvedUrl("assets/smoke.png")
+        color: root.dim
+        colorVariation: 0.03
+        alpha: 0.14
+        alphaVariation: 0.05
+        entryEffect: ImageParticle.Fade
+      }
+
+      Emitter {
+        id: smokeEmitter
+        enabled: appRow.running
+        // Just left of the rocket glyph, at its vertical centre.
+        x: rowContent.x + deployButton.x + deployButton.width * 0.3
+        y: rowContent.y + deployButton.y + deployButton.height * 0.5
+        width: 1; height: Style.space(4)
+        emitRate: 10
+        lifeSpan: appRow.smokeLifeMs
+        lifeSpanVariation: 900
+        maximumEmitted: 40
+        size: Style.space(8)
+        endSize: Style.space(24)
+        sizeVariation: Style.space(4)
+        velocity: AngleDirection { angle: 180; angleVariation: 10; magnitude: Style.space(30); magnitudeVariation: Style.space(10) }
+        // Drifts left and rises a touch, the way smoke does.
+        acceleration: AngleDirection { angle: 200; magnitude: Style.space(8) }
+      }
+
+      Wander {
+        xVariance: Style.space(10)
+        yVariance: Style.space(14)
+        pace: Style.space(30)
+      }
     }
 
     MouseArea {
@@ -932,6 +977,7 @@ Panel {
 
     RowLayout {
       id: rowContent
+      z: 2
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
@@ -947,7 +993,7 @@ Panel {
           textFormat: Text.PlainText
           Layout.fillWidth: true
           text: appRow.app ? appRow.app.name : ""
-          color: appRow.failed ? root.failedColor : (appRow.running ? appRow.pulseColor : root.foreground)
+          color: appRow.failed ? root.failedColor : root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           elide: Text.ElideRight
@@ -960,7 +1006,7 @@ Panel {
             ? appRow.app.branch + " @ " + (appRow.app.sha || "no deploy")
               + (appRow.stateText !== "" ? "   " + appRow.stateText : "")
             : ""
-          color: appRow.failed ? root.failedColor : (appRow.running ? appRow.pulseColor : root.dim)
+          color: appRow.failed ? root.failedColor : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
@@ -970,6 +1016,7 @@ Panel {
       // Deploy and restart. While a job runs, the matching glyph shakes and
       // takes the busy colour; the button stays in place but does nothing.
       ActionGlyphButton {
+        id: deployButton
         glyph: "󱓞"
         active: appRow.running && !(appRow.app && appRow.app.isRestart)
         tooltipText: appRow.busy ? "Deploying" : "Deploy " + (appRow.app ? appRow.app.branch : "")
