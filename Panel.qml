@@ -936,7 +936,7 @@ Panel {
         source: Qt.resolvedUrl("assets/smoke.png")
         color: root.dim
         colorVariation: 0.08
-        alpha: 0.7
+        alpha: 0.8
         alphaVariation: 0.25
         entryEffect: ImageParticle.Fade
       }
@@ -951,13 +951,13 @@ Panel {
         x: rowContent.x + deployButton.x + deployButton.width * 0.28
         y: rowContent.y + deployButton.y + deployButton.height * 0.68
         width: Style.space(2); height: Style.space(2)
-        emitRate: 55
+        emitRate: 90
         lifeSpan: appRow.smokeLifeMs
         lifeSpanVariation: 700
-        maximumEmitted: 160
-        size: Style.space(3)
-        endSize: Style.space(5)
-        sizeVariation: Style.space(2)
+        maximumEmitted: 260
+        size: Style.space(2)
+        endSize: Style.space(3)
+        sizeVariation: Style.space(1)
         velocity: AngleDirection { angle: 135; angleVariation: 18; magnitude: Style.space(56); magnitudeVariation: Style.space(12) }
         acceleration: AngleDirection { angle: 262; magnitude: Style.space(46) }
       }
