@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "joelgaff.hatchbox",
   "name": "Hatchbox",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Joel Gaff, Jr.",
   "description": "Monitor and manage Hatchbox.io app deploys from the bar",
   "kinds": [
